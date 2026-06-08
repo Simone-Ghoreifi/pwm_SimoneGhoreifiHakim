@@ -1,0 +1,60 @@
+/* ===================================================
+   Override colore primario Bootstrap 5 → DarkCyan
+   =================================================== */
+:root {
+    --bs-primary: #008B8B;
+    --bs-primary-rgb: 0, 139, 139;
+    --bs-link-color: #008B8B;
+    --bs-link-hover-color: #006666;
+}
+
+.btn-primary {
+    --bs-btn-bg: #008B8B;
+    --bs-btn-border-color: #008B8B;
+    --bs-btn-hover-bg: #006666;
+    --bs-btn-hover-border-color: #006666;
+    --bs-btn-active-bg: #005c5c;
+    --bs-btn-active-border-color: #005c5c;
+    --bs-btn-disabled-bg: #008B8B;
+    --bs-btn-disabled-border-color: #008B8B;
+}
+
+.btn-outline-primary {
+    --bs-btn-color: #008B8B;
+    --bs-btn-border-color: #008B8B;
+    --bs-btn-hover-bg: #008B8B;
+    --bs-btn-hover-border-color: #008B8B;
+    --bs-btn-active-bg: #006666;
+}
+
+.bg-primary { background-color: #008B8B !important; }
+.text-primary { color: #008B8B !important; }
+.border-primary { border-color: #008B8B !important; }
+.badge.bg-primary { background-color: #008B8B !important; }
+
+/* Navbar links */
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+}
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+    color: #ffffff;
+}
+.navbar-dark .navbar-brand {
+    color: #ffffff;
+    font-size: 1.25rem;
+}
+
+/* Card login/registrazione */
+.login-card {
+    width: 100%;
+    max-width: 440px;
+}
+
+/* Selettore tipo ricerca nella home */
+.search-type-select {
+    max-width: 185px;
+}
+
+/* Utility: classe .hidden compatibile con Bootstrap */
+.hidden { display: none !important; }

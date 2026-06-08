@@ -1,0 +1,5 @@
+/* Altezza minima textarea note nel ricettario */
+.cookbook-note {
+    min-height: 80px;
+    resize: vertical;
+}
