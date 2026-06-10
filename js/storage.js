@@ -14,6 +14,9 @@
  *  pgrc_cookbooks    → { [userId]: Array<{mealId, notes}> }
  *  pgrc_reviews      → { [mealId]: Array<Recensione> }
  *  pgrc_meals_cache  → { timestamp: number, meals: Array<Pasto> }
+ *  pgrc_categories_cache → { timestamp: number, categories: Array<Categoria> }
+ *  pgrc_areas_cache  → { timestamp: number, areas: Array<Area> }
+ *  pgrc_meal_details_cache → { [mealId]: { timestamp: number, meal: Pasto } }
  *
  * STRUTTURA DATI IN SESSIONSTORAGE:
  * ─────────────────────────────────────────────────────────────────
@@ -58,17 +61,25 @@
  *     JSON.parse(localStorage.getItem('pgrc_meals_cache'))
  *     → restituisce la cache delle ricette con il suo timestamp
  *
+ *     JSON.parse(localStorage.getItem('pgrc_categories_cache'))
+ *     JSON.parse(localStorage.getItem('pgrc_areas_cache'))
+ *     → restituiscono le cache dei filtri della home
+ *
+ *     JSON.parse(localStorage.getItem('pgrc_meal_details_cache'))
+ *     → restituisce i dettagli ricetta già aperti o recuperati dalla cache catalogo
+ *
  *     sessionStorage.getItem('pgrc_loggedInUser')
  *     → restituisce l'ID dell'utente attualmente loggato (o null)
  *
  * SEQUENZA DA MOSTRARE AL PROF (per dimostrare il funzionamento):
  *
  *   PASSO 1 — Prima di qualsiasi azione:
- *     localStorage è vuoto (o ha solo pgrc_meals_cache se si è caricata la home)
+ *     localStorage è vuoto (o ha cache API se si è già caricata la home)
  *     sessionStorage è vuoto
  *
  *   PASSO 2 — Dopo la registrazione:
  *     localStorage → pgrc_users: array con il nuovo utente
+ *     (la password compare come passwordHash/passwordSalt, non in chiaro)
  *     localStorage → pgrc_cookbooks: oggetto con entry vuota per il nuovo userId
  *
  *   PASSO 3 — Dopo il login:
@@ -76,6 +87,8 @@
  *
  *   PASSO 4 — Dopo aver visitato la home (prima volta):
  *     localStorage → pgrc_meals_cache: oggetto enorme con timestamp + array di tutte le ricette
+ *     localStorage → pgrc_categories_cache: categorie TheMealDB per il filtro
+ *     localStorage → pgrc_areas_cache: aree geografiche TheMealDB per il filtro
  *     (questo dimostra il caching: la prossima visita non fa chiamate API)
  *
  *   PASSO 5 — Dopo aver aggiunto una ricetta al ricettario:
@@ -104,8 +117,11 @@ const USERS_KEY = 'pgrc_users';        // Array degli utenti registrati
 const COOKBOOKS_KEY = 'pgrc_cookbooks'; // Ricettari personali per userId
 const REVIEWS_KEY = 'pgrc_reviews';    // Recensioni per mealId
 const MEALS_CACHE_KEY = 'pgrc_meals_cache'; // Cache del catalogo TheMealDB
+const CATEGORIES_CACHE_KEY = 'pgrc_categories_cache'; // Cache filtro categorie
+const AREAS_CACHE_KEY = 'pgrc_areas_cache'; // Cache filtro aree geografiche
+const MEAL_DETAILS_CACHE_KEY = 'pgrc_meal_details_cache'; // Cache dettagli ricetta
 
-// TTL della cache ricette in millisecondi: 1 ora = 60 min × 60 sec × 1000 ms
+// TTL delle cache API in millisecondi: 1 ora = 60 min × 60 sec × 1000 ms
 const CACHE_TTL = 3600000;
 
 // ─── Funzioni generiche (usate internamente) ──────────────────────────────────
@@ -155,13 +171,39 @@ function saveData(key, data) {
     }
 }
 
+/**
+ * Legge una cache con struttura { timestamp, [valueKey]: ... } e ne applica il TTL.
+ * Usata per catalogo, categorie e aree: stesso formato, chiave dati diversa.
+ */
+function getTimedCacheValue(storageKey, valueKey) {
+    const cached = getData(storageKey);
+    if (!cached || !cached.timestamp || !Object.prototype.hasOwnProperty.call(cached, valueKey)) {
+        return null;
+    }
+
+    if (Date.now() - cached.timestamp > CACHE_TTL) {
+        localStorage.removeItem(storageKey);
+        return null;
+    }
+
+    return cached[valueKey];
+}
+
+/**
+ * Salva una cache semplice con timestamp e payload. Esempio:
+ * saveTimedCacheValue('pgrc_areas_cache', 'areas', areas).
+ */
+function saveTimedCacheValue(storageKey, valueKey, value) {
+    saveData(storageKey, { timestamp: Date.now(), [valueKey]: value });
+}
+
 // ─── Funzioni per gli Utenti ──────────────────────────────────────────────────
 
 /**
  * Restituisce l'array di tutti gli utenti registrati.
  * Se la chiave non esiste ancora (prima registrazione), restituisce array vuoto.
  *
- * @returns {Array<{id, username, email, password, favoriteDishes}>}
+ * @returns {Array<{id, username, email, passwordHash, passwordSalt, passwordAlgorithm, favoriteDishes}>}
  *
  * DEVTOOLS — Console: JSON.parse(localStorage.getItem('pgrc_users'))
  */
@@ -243,15 +285,7 @@ function saveReviews(reviews) { saveData(REVIEWS_KEY, reviews); }
  *   console.log('Età cache (minuti):', (Date.now() - c.timestamp) / 60000);
  */
 function getMealsCache() {
-    const cached = getData(MEALS_CACHE_KEY);
-    if (!cached) return null; // Cache assente
-
-    if (Date.now() - cached.timestamp > CACHE_TTL) {
-        // Cache scaduta: la rimuovo così home.js farà un nuovo fetch
-        localStorage.removeItem(MEALS_CACHE_KEY);
-        return null;
-    }
-    return cached.meals; // Cache valida: restituisco i dati
+    return getTimedCacheValue(MEALS_CACHE_KEY, 'meals');
 }
 
 /**
@@ -265,5 +299,91 @@ function getMealsCache() {
  * Si può verificare con: JSON.parse(localStorage.getItem('pgrc_meals_cache')).meals.length
  */
 function saveMealsCache(meals) {
-    saveData(MEALS_CACHE_KEY, { timestamp: Date.now(), meals });
+    saveTimedCacheValue(MEALS_CACHE_KEY, 'meals', meals);
+}
+
+/**
+ * Restituisce le categorie TheMealDB salvate per il filtro della home.
+ *
+ * @returns {Array|null}
+ */
+function getCategoriesCache() {
+    return getTimedCacheValue(CATEGORIES_CACHE_KEY, 'categories');
+}
+
+/**
+ * Salva le categorie TheMealDB in localStorage.
+ *
+ * @param {Array} categories - Array restituito da categories.php
+ */
+function saveCategoriesCache(categories) {
+    saveTimedCacheValue(CATEGORIES_CACHE_KEY, 'categories', categories);
+}
+
+/**
+ * Restituisce le aree geografiche TheMealDB salvate per il filtro della home.
+ *
+ * @returns {Array|null}
+ */
+function getAreasCache() {
+    return getTimedCacheValue(AREAS_CACHE_KEY, 'areas');
+}
+
+/**
+ * Salva le aree geografiche TheMealDB in localStorage.
+ *
+ * @param {Array} areas - Array restituito da list.php?a=list
+ */
+function saveAreasCache(areas) {
+    saveTimedCacheValue(AREAS_CACHE_KEY, 'areas', areas);
+}
+
+/**
+ * Cerca una ricetta completa dentro la cache del catalogo A-Z.
+ * Utile per recipe.js: se la home ha già scaricato tutto, il dettaglio può
+ * partire dal Web Storage senza fare una nuova lookup API.
+ *
+ * @param {string} mealId - ID TheMealDB della ricetta
+ * @returns {Object|null}
+ */
+function findMealInCatalogCache(mealId) {
+    const meals = getMealsCache();
+    if (!meals) return null;
+    return meals.find(meal => meal.idMeal === mealId) || null;
+}
+
+/**
+ * Restituisce un dettaglio ricetta salvato in pgrc_meal_details_cache.
+ *
+ * @param {string} mealId - ID TheMealDB della ricetta
+ * @returns {Object|null}
+ */
+function getMealDetailCache(mealId) {
+    const cache = getData(MEAL_DETAILS_CACHE_KEY) || {};
+    const cached = cache[mealId];
+    if (!cached) return null;
+
+    if (!cached.timestamp || !cached.meal || Date.now() - cached.timestamp > CACHE_TTL) {
+        delete cache[mealId];
+        saveData(MEAL_DETAILS_CACHE_KEY, cache);
+        return null;
+    }
+
+    return cached.meal;
+}
+
+/**
+ * Salva o aggiorna il dettaglio di una singola ricetta.
+ *
+ * @param {Object} meal - Oggetto pasto completo TheMealDB
+ */
+function saveMealDetailCache(meal) {
+    if (!meal || !meal.idMeal) return;
+
+    const cache = getData(MEAL_DETAILS_CACHE_KEY) || {};
+    cache[meal.idMeal] = {
+        timestamp: Date.now(),
+        meal
+    };
+    saveData(MEAL_DETAILS_CACHE_KEY, cache);
 }

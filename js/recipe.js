@@ -16,14 +16,15 @@
  *   Si legge con: new URLSearchParams(window.location.search).get('id')
  *
  * DIPENDENZE (caricate prima in recipe.html):
- *   - api.js      (api.lookupById per i dettagli della ricetta)
- *   - storage.js  (getCookbooks, saveCookbooks, getReviews, saveReviews)
+ *   - api.js      (api.lookupById come fallback per i dettagli della ricetta)
+ *   - storage.js  (cache dettagli, ricettari, recensioni)
  *   - auth.js     (auth.checkAuth, auth.getCurrentUser)
  *
  * DEVTOOLS — Cosa mostrare in questa pagina:
  *
  *   PRIMA di aggiungere al ricettario:
  *     localStorage → pgrc_cookbooks → il tuo userId → array vuoto []
+ *     localStorage → pgrc_meal_details_cache → contiene il dettaglio della ricetta aperta
  *
  *   DOPO aver aggiunto la ricetta:
  *     localStorage → pgrc_cookbooks → il tuo userId → [{"mealId":"52772","notes":""}]
@@ -94,16 +95,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         return html;
     }
 
+    async function getRecipeDetail() {
+        const cachedDetail = getMealDetailCache(mealId);
+        if (cachedDetail) return cachedDetail;
+
+        const catalogMeal = findMealInCatalogCache(mealId);
+        if (catalogMeal) {
+            saveMealDetailCache(catalogMeal);
+            return catalogMeal;
+        }
+
+        const data = await api.lookupById(mealId);
+        if (!data || !data.meals) return null;
+
+        const meal = data.meals[0];
+        saveMealDetailCache(meal);
+        return meal;
+    }
+
     // =========================================================================
     // FUNZIONE: loadRecipeDetails
     // =========================================================================
     /**
-     * Scarica i dettagli completi della ricetta dall'API e renderizza l'HTML.
+     * Recupera i dettagli completi della ricetta dal Web Storage e renderizza l'HTML.
      *
      * FLUSSO DETTAGLIATO:
-     *   1. Chiama api.lookupById(mealId) → aspetta la risposta
-     *   2. Se la risposta è nulla o vuota → mostra errore
-     *   3. Estrae l'oggetto pasto (sempre meals[0], è sempre un singolo risultato)
+     *   1. Cerca pgrc_meal_details_cache[mealId]
+     *   2. Se manca, cerca la ricetta nel catalogo pgrc_meals_cache
+     *   3. Se manca ancora, chiama api.lookupById(mealId) e salva il risultato
      *   4. Costruisce l'array degli ingredienti iterando su strIngredient1...20
      *   5. Verifica se la ricetta è già nel ricettario dell'utente
      *   6. Genera e inietta l'HTML completo nel card-body
@@ -127,14 +146,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   </div>
      */
     async function loadRecipeDetails() {
-        const data = await api.lookupById(mealId);
+        const meal = await getRecipeDetail();
 
-        if (!data || !data.meals) {
+        if (!meal) {
             recipeCardBody.innerHTML = '<p class="text-danger">Ricetta non trovata.</p>';
             return;
         }
-
-        const meal = data.meals[0]; // L'API restituisce sempre un array di 1 elemento
 
         // Costruzione array ingredienti
         const ingredients = [];

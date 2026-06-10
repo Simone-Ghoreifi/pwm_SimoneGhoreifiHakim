@@ -80,15 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
     //   3. Chiama auth.login() che cerca l'utente in localStorage
     //   4. Se successo: redirect a home.html
     //   5. Se fallimento: mostra il messaggio di errore nel paragrafo #login-error
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault(); // FONDAMENTALE: senza questo la pagina si ricaricherebbe
 
         const username = document.getElementById('login-username').value;
         const password = document.getElementById('login-password').value;
 
-        const result = auth.login(username, password);
+        const result = await auth.login(username, password);
         // result = { success: true, user: {...} }  oppure
-        // result = { success: false, message: "Username o password non corretti." }
+        // result = { success: false, message: "Username non registrato..." }
 
         if (result.success) {
             window.location.href = 'home.html'; // Login OK: vai alla home
@@ -104,10 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
     //   2. Legge tutti e 4 i campi del form (username, email, password, favoriteDishes)
     //      NOTA: favoriteDishes non ha required, quindi può essere stringa vuota ""
     //   3. Chiama auth.register() che valida e salva il nuovo utente
-    //   4. Se successo: esegue AUTOMATICAMENTE il login (l'utente non deve ri-inserire
-    //      le credenziali) e poi redirect a home.html
+    //   4. Se successo: redirect a first-login.html, senza auto-login
     //   5. Se fallimento (username o email già in uso): mostra il messaggio di errore
-    registerForm.addEventListener('submit', (e) => {
+    registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const username = document.getElementById('register-username').value;
@@ -116,14 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Campo facoltativo: se vuoto, sarà una stringa ""
         const favoriteDishes = document.getElementById('register-favorites').value;
 
-        const result = auth.register(username, email, password, favoriteDishes);
+        const result = await auth.register(username, email, password, favoriteDishes);
 
         if (result.success) {
-            // Login automatico post-registrazione: non si torna mai al form di login
-            const loginResult = auth.login(username, password);
-            if (loginResult.success) window.location.href = 'home.html';
-            // Se per qualche motivo il login fallisce dopo la registrazione
-            // (caso teoricamente impossibile), l'utente rimarrebbe sulla pagina
+            // Non si crea sessione: la pagina successiva chiede il primo login.
+            sessionStorage.setItem('pgrc_pendingFirstLoginUser', result.user.username);
+            window.location.href = 'first-login.html';
         } else {
             registerError.textContent = result.message; // Es. "Username già esistente."
         }

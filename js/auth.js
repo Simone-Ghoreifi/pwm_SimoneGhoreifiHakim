@@ -1,262 +1,252 @@
 /**
- * =============================================================================
- * auth.js — Livello autenticazione: registrazione, login, logout, sessione
- * =============================================================================
+ * auth.js — Registrazione, login, logout e sessione.
  *
- * Questo modulo gestisce tutto ciò che riguarda l'identità dell'utente.
- * Viene caricato DOPO storage.js (da cui usa getUsers, saveUsers, getCookbooks,
- * saveCookbooks) e PRIMA dei controller di pagina.
- *
- * DIPENDENZE (devono essere caricate prima di questo script):
- *   - storage.js  (getUsers, saveUsers, getCookbooks, saveCookbooks)
- *
- * ESPONE GLOBALMENTE:
- *   - La costante LOGGED_IN_USER_KEY (usata anche da login.js per il check iniziale)
- *   - L'oggetto `auth` con i metodi: register, login, logout, getCurrentUser, checkAuth
- *
- * =============================================================================
- * COME FUNZIONA LA SESSIONE (sessionStorage):
- * =============================================================================
- *
- * Al login, viene salvato l'ID dell'utente in sessionStorage sotto la chiave
- * "pgrc_loggedInUser". sessionStorage (a differenza di localStorage) viene
- * automaticamente svuotato quando il browser o la scheda vengono chiusi.
- * Questo simula il comportamento di una sessione web tradizionale.
- *
- * DEVTOOLS — Sessione attiva:
- *   Application → Archiviazione di sessione → [sito corrente]
- *   Chiave: pgrc_loggedInUser
- *   Valore: "user_1712345678900" (esempio di ID generato al momento della registrazione)
- *
- * DEVTOOLS — Dopo il logout:
- *   La chiave pgrc_loggedInUser scomparirà da sessionStorage.
- *   localStorage rimarrà intatto (utente, ricettario, recensioni non vengono cancellati).
- *
- * FLUSSO COMPLETO DI AUTENTICAZIONE:
- *
- *   REGISTRAZIONE:
- *     1. login.js legge i campi del form (username, email, password, favoriteDishes)
- *     2. Chiama auth.register(username, email, password, favoriteDishes)
- *     3. auth.register valida unicità username/email → salva utente → crea ricettario vuoto
- *     4. login.js chiama auth.login() automaticamente → redirect a home.html
- *
- *   LOGIN:
- *     1. login.js legge username e password dal form
- *     2. Chiama auth.login(username, password)
- *     3. auth.login trova l'utente, salva l'ID in sessionStorage → redirect a home.html
- *
- *   PROTEZIONE PAGINE:
- *     1. Ogni pagina protetta (home, recipe, profile) chiama auth.checkAuth() subito
- *     2. checkAuth legge sessionStorage → se vuoto → redirect immediato a index.html
- *     3. L'utente non autenticato non vede MAI il contenuto delle pagine protette
- *
- *   LOGOUT:
- *     1. L'utente clicca il link "Logout" nella navbar
- *     2. Il listener aggiunto da auth.js intercetta il click
- *     3. Chiama auth.logout() → svuota sessionStorage → redirect a index.html
- *
- * =============================================================================
+ * Le password non vengono mai salvate in chiaro: ogni utente contiene
+ * `passwordSalt`, `passwordHash` e `passwordAlgorithm`. In un'app reale l'hash
+ * andrebbe calcolato lato server, ma per questo progetto client-side è comunque
+ * preferibile mostrare nel localStorage un digest non reversibile.
  */
 
-// Chiave usata in sessionStorage per memorizzare l'ID dell'utente loggato.
-// È una costante globale perché viene referenziata anche da login.js
-// per verificare se esiste già una sessione attiva all'apertura della pagina.
+// Chiave sessionStorage usata dai controller per capire se l'utente è loggato.
 const LOGGED_IN_USER_KEY = 'pgrc_loggedInUser';
 
-/**
- * Oggetto `auth` — esposto globalmente.
- * Contiene tutti i metodi relativi all'autenticazione e alla gestione della sessione.
- */
+const PASSWORD_ALGORITHM = 'SHA-256';
+const FALLBACK_PASSWORD_ALGORITHM = 'FNV-1A-FALLBACK';
+
+function normalizeUsername(username) {
+    return username.trim().toLowerCase();
+}
+
+function findUserByUsername(users, username) {
+    const normalized = normalizeUsername(username);
+    return users.find(user => user.username.toLowerCase() === normalized);
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function supportsSubtleCrypto() {
+    return Boolean(window.crypto && window.crypto.subtle && window.TextEncoder);
+}
+
+function createPasswordSalt() {
+    const bytes = new Uint8Array(16);
+
+    if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(bytes);
+        return bytesToHex(bytes);
+    }
+
+    // Fallback raro per contesti browser molto limitati: non è crittograficamente
+    // forte, ma evita comunque di salvare password in chiaro.
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function fallbackHash(value) {
+    let hashA = 0x811c9dc5;
+    let hashB = 0x9e3779b9;
+
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        hashA ^= code;
+        hashA = Math.imul(hashA, 0x01000193);
+        hashB ^= code + i;
+        hashB = Math.imul(hashB, 0x85ebca6b);
+    }
+
+    const partA = (hashA >>> 0).toString(16).padStart(8, '0');
+    const partB = (hashB >>> 0).toString(16).padStart(8, '0');
+    return `fallback-${partA}${partB}`;
+}
+
+async function hashPassword(password, salt, algorithm = PASSWORD_ALGORITHM) {
+    const valueToHash = `${salt}:${password}`;
+
+    if (algorithm === FALLBACK_PASSWORD_ALGORITHM || !supportsSubtleCrypto()) {
+        return {
+            hash: fallbackHash(valueToHash),
+            algorithm: FALLBACK_PASSWORD_ALGORITHM
+        };
+    }
+
+    const encoder = new TextEncoder();
+    const digest = await window.crypto.subtle.digest(PASSWORD_ALGORITHM, encoder.encode(valueToHash));
+
+    return {
+        hash: bytesToHex(new Uint8Array(digest)),
+        algorithm: PASSWORD_ALGORITHM
+    };
+}
+
+async function createPasswordCredential(password) {
+    const passwordSalt = createPasswordSalt();
+    const digest = await hashPassword(password, passwordSalt);
+
+    return {
+        passwordSalt,
+        passwordHash: digest.hash,
+        passwordAlgorithm: digest.algorithm
+    };
+}
+
+async function verifyPassword(user, password) {
+    if (!user) return false;
+
+    // Compatibilità con eventuali utenti creati prima del refactor: il login
+    // funziona una volta e poi migrateLegacyPassword rimuove il campo `password`.
+    if (!user.passwordHash && typeof user.password === 'string') {
+        return user.password === password;
+    }
+
+    if (!user.passwordHash || !user.passwordSalt) return false;
+
+    const digest = await hashPassword(
+        password,
+        user.passwordSalt,
+        user.passwordAlgorithm || PASSWORD_ALGORITHM
+    );
+
+    return digest.hash === user.passwordHash;
+}
+
+async function migrateLegacyPassword(users, user, password) {
+    if (!user || !Object.prototype.hasOwnProperty.call(user, 'password')) return user;
+
+    const userIndex = users.findIndex(candidate => candidate.id === user.id);
+    if (userIndex === -1) return user;
+
+    const credential = await createPasswordCredential(password);
+    const migratedUser = {
+        ...users[userIndex],
+        ...credential
+    };
+    delete migratedUser.password;
+
+    users[userIndex] = migratedUser;
+    saveUsers(users);
+    return migratedUser;
+}
+
 const auth = {
-
     /**
-     * Registra un nuovo utente nell'applicazione.
-     *
-     * FLUSSO DETTAGLIATO:
-     *   1. Carica l'array di tutti gli utenti esistenti da localStorage (getUsers)
-     *   2. Verifica che non esista già un utente con lo stesso username
-     *      (confronto case-insensitive: "Mario" e "mario" sono considerati uguali)
-     *   3. Verifica che non esista già un utente con la stessa email
-     *      (confronto case-insensitive)
-     *   4. Crea l'oggetto nuovo utente con un ID univoco basato sul timestamp corrente
-     *   5. Aggiunge il nuovo utente all'array e salva in localStorage
-     *   6. Crea un ricettario vuoto per il nuovo utente in pgrc_cookbooks
-     *      (l'utente inizia con un ricettario vuoto come richiesto dalla specifica)
-     *   7. Restituisce { success: true, user: {...} }
-     *
-     * @param {string} username      - Username scelto dall'utente
-     * @param {string} email         - Indirizzo email
-     * @param {string} password      - Password in chiaro (limitazione architettura client-only)
-     * @param {string} favoriteDishes - Piatti preferiti separati da virgola (facoltativo)
-     * @returns {{success: boolean, message?: string, user?: Object}}
-     *
-     * DEVTOOLS — Dopo la registrazione:
-     *   localStorage → pgrc_users: array con il nuovo oggetto utente
-     *   localStorage → pgrc_cookbooks: { "user_XXX": [] } (ricettario vuoto)
-     *
-     * STRUTTURA OGGETTO UTENTE SALVATO:
-     *   {
-     *     "id": "user_1712345678900",   ← timestamp ms al momento della registrazione
-     *     "username": "mario_rossi",
-     *     "email": "mario@example.com",
-     *     "password": "miapassword",    ← in chiaro (limitazione architettura)
-     *     "favoriteDishes": "Pizza, Risotto"
-     *   }
+     * Registra l'utente e crea il ricettario vuoto. Non avvia la sessione:
+     * login.js reindirizza alla pagina first-login.html per la convalida.
      */
-    register: (username, email, password, favoriteDishes = '') => {
+    register: async (username, email, password, favoriteDishes = '') => {
         const users = getUsers();
+        const cleanUsername = username.trim();
+        const cleanEmail = email.trim();
 
-        // Controllo unicità username (case-insensitive)
-        if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+        if (findUserByUsername(users, cleanUsername)) {
             return { success: false, message: 'Username già esistente.' };
         }
 
-        // Controllo unicità email (case-insensitive)
-        if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        if (users.some(user => user.email.toLowerCase() === cleanEmail.toLowerCase())) {
             return { success: false, message: 'Email già in uso.' };
         }
 
-        // Creazione ID univoco: prefisso "user_" + millisecondi dal 1970
-        // Date.now() restituisce un numero intero (es. 1712345678900)
-        // La probabilità di collisione in un'app client-only è trascurabile
+        const credential = await createPasswordCredential(password);
         const newUser = {
             id: `user_${Date.now()}`,
-            username,
-            email,
-            password, // In un'app reale andrebbe hashata lato server (es. bcrypt)
-            favoriteDishes
+            username: cleanUsername,
+            email: cleanEmail,
+            ...credential,
+            favoriteDishes: favoriteDishes.trim()
         };
 
         users.push(newUser);
-        saveUsers(users); // Persiste in localStorage
+        saveUsers(users);
 
-        // Crea la entry del ricettario: chiave = userId, valore = array vuoto
         const cookbooks = getCookbooks();
         cookbooks[newUser.id] = [];
-        saveCookbooks(cookbooks); // Persiste in localStorage
+        saveCookbooks(cookbooks);
 
         return { success: true, user: newUser };
     },
 
     /**
-     * Autentica un utente esistente e avvia la sessione.
-     *
-     * FLUSSO DETTAGLIATO:
-     *   1. Carica tutti gli utenti da localStorage
-     *   2. Cerca un utente con username E password corrispondenti
-     *      (username case-insensitive, password case-SENSITIVE)
-     *   3. Se trovato: salva l'ID utente in sessionStorage e restituisce successo
-     *   4. Se non trovato: restituisce errore senza modificare lo stato
-     *
-     * @param {string} username - Username inserito nel form
-     * @param {string} password - Password inserita nel form
-     * @returns {{success: boolean, message?: string, user?: Object}}
-     *
-     * DEVTOOLS — Dopo il login:
-     *   sessionStorage → pgrc_loggedInUser: "user_1712345678900"
-     *   (il valore corrisponde all'id dell'utente trovato)
+     * Login in due passaggi: prima verifica che lo username esista, poi controlla
+     * la password. Così il messaggio "username non registrato" è preciso.
      */
-    login: (username, password) => {
+    login: async (username, password) => {
         const users = getUsers();
+        const user = findUserByUsername(users, username);
 
-        // Array.find restituisce il primo elemento che soddisfa la condizione, o undefined
-        const user = users.find(
-            u => u.username.toLowerCase() === username.toLowerCase() && u.password === password
-        );
-
-        if (user) {
-            // Salva solo l'ID (non l'intero oggetto utente) per sicurezza e leggerezza
-            sessionStorage.setItem(LOGGED_IN_USER_KEY, user.id);
-            return { success: true, user };
+        if (!user) {
+            return { success: false, message: 'Username non registrato presso il nostro db.' };
         }
-        return { success: false, message: 'Username o password non corretti.' };
+
+        const passwordMatches = await verifyPassword(user, password);
+        if (!passwordMatches) {
+            return { success: false, message: 'Password non corretta.' };
+        }
+
+        const migratedUser = await migrateLegacyPassword(users, user, password);
+        sessionStorage.setItem(LOGGED_IN_USER_KEY, migratedUser.id);
+        return { success: true, user: migratedUser };
     },
 
-    /**
-     * Termina la sessione dell'utente corrente e reindirizza al login.
-     *
-     * FLUSSO:
-     *   1. Rimuove la chiave pgrc_loggedInUser da sessionStorage
-     *      (localStorage rimane intatto: dati utente, ricettario, recensioni non toccati)
-     *   2. Reindirizza immediatamente a index.html (pagina di login)
-     *
-     * DEVTOOLS — Dopo il logout:
-     *   sessionStorage → vuoto (la chiave pgrc_loggedInUser non esiste più)
-     *   localStorage → invariato (pgrc_users, pgrc_cookbooks, ecc. restano)
-     */
     logout: () => {
         sessionStorage.removeItem(LOGGED_IN_USER_KEY);
         window.location.href = 'index.html';
     },
 
-    /**
-     * Restituisce l'oggetto utente completo dell'utente attualmente loggato.
-     *
-     * FLUSSO:
-     *   1. Legge l'ID utente da sessionStorage
-     *   2. Se non esiste (sessione scaduta/non avviata) → restituisce null
-     *   3. Cerca l'utente nell'array localStorage tramite l'ID
-     *   4. Restituisce l'oggetto utente aggiornato (importante: legge SEMPRE da
-     *      localStorage, non da una variabile in memoria, così riflette eventuali
-     *      modifiche fatte da profile.js senza ricaricare la pagina)
-     *
-     * @returns {Object|null} L'oggetto utente completo, o null se non loggato
-     *
-     * USO TIPICO NEI CONTROLLER:
-     *   const currentUser = auth.getCurrentUser();
-     *   if (!currentUser) return; // Sicurezza aggiuntiva oltre checkAuth
-     */
     getCurrentUser: () => {
         const userId = sessionStorage.getItem(LOGGED_IN_USER_KEY);
         if (!userId) return null;
-        // Legge sempre da localStorage per avere dati aggiornati
-        return getUsers().find(u => u.id === userId) || null;
+        return getUsers().find(user => user.id === userId) || null;
     },
 
-    /**
-     * Verifica che ci sia una sessione attiva; altrimenti reindirizza al login.
-     * Chiamata come PRIMA istruzione in ogni pagina protetta (home, recipe, profile).
-     *
-     * FLUSSO:
-     *   1. Chiama getCurrentUser()
-     *   2. Se restituisce null (nessuna sessione) → redirect immediato a index.html
-     *   3. Se restituisce un utente → non fa nulla, il controller prosegue
-     *
-     * COMPORTAMENTO ATTESO:
-     *   Se si apre direttamente recipe.html o profile.html senza essere loggati,
-     *   si viene reindirizzati istantaneamente a index.html.
-     *   L'URL nella barra del browser cambierà prima che la pagina sia visibile.
-     */
     checkAuth: () => {
         if (!auth.getCurrentUser()) window.location.href = 'index.html';
+    },
+
+    createPasswordCredential,
+    verifyPassword,
+
+    /**
+     * Se nel browser esistono utenti storici con `password` in chiaro, li converte
+     * appena possibile. Utile quando si mostra Application/localStorage al docente.
+     */
+    migrateLegacyPasswords: async () => {
+        const users = getUsers();
+        let changed = false;
+
+        for (const user of users) {
+            if (!Object.prototype.hasOwnProperty.call(user, 'password')) continue;
+
+            const credential = await createPasswordCredential(user.password);
+            Object.assign(user, credential);
+            delete user.password;
+            changed = true;
+        }
+
+        if (changed) saveUsers(users);
     }
 };
 
-/**
- * LISTENER GLOBALE PER IL PULSANTE LOGOUT
- *
- * Questo blocco viene eseguito quando il DOM è pronto, su TUTTE le pagine
- * che caricano auth.js (home, recipe, profile). Cerca il pulsante #logout-btn
- * nella navbar e gli aggiunge un listener per il click.
- *
- * PERCHÉ CENTRALIZZATO QUI?
- *   Tutte le pagine protette hanno la stessa navbar con #logout-btn.
- *   Anziché duplicare il listener in ogni controller (home.js, recipe.js,
- *   profile.js), lo si gestisce una volta sola qui in auth.js.
- *
- * Il pulsante logout è un <a href="#">, quindi:
- *   - e.preventDefault() impedisce al browser di seguire l'href "#"
- *     (che causerebbe un reload della pagina o aggiunta di "#" all'URL)
- *   - auth.logout() svuota sessionStorage e reindirizza
- */
 document.addEventListener('DOMContentLoaded', () => {
+    auth.migrateLegacyPasswords().catch(error => {
+        console.error('Migrazione password legacy fallita:', error);
+    });
+
     const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
-            e.preventDefault(); // Blocca il comportamento default del link
-            auth.logout();      // Termina sessione e va a index.html
-        });
-    }
-    // NOTA: se logoutBtn è null (siamo su index.html che non ha navbar),
-    // il blocco if semplicemente non esegue nulla — nessun errore.
+    if (!logoutBtn) return;
+
+    logoutBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+
+        const confirmed = typeof ui !== 'undefined'
+            ? await ui.confirm({
+                title: 'Conferma logout',
+                message: 'Vuoi terminare la sessione corrente?',
+                confirmText: 'Logout',
+                confirmVariant: 'btn-primary',
+                iconClass: 'bi bi-box-arrow-right'
+            })
+            : confirm('Vuoi terminare la sessione corrente?');
+
+        if (confirmed) auth.logout();
+    });
 });

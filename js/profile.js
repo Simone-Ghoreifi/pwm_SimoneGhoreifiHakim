@@ -16,17 +16,15 @@
  *   - auth.js     (auth.checkAuth, auth.getCurrentUser, auth.logout)
  *
  * NOTA IMPORTANTE SUL RICETTARIO:
- *   In localStorage il ricettario contiene solo mealId e notes, NON il nome o l'immagine
- *   della ricetta. Per mostrarli nella UI, si deve chiamare api.lookupById per ogni
- *   ricetta salvata. Questo significa N chiamate API, dove N = dimensione del ricettario.
- *   Le chiamate vengono eseguite in sequenza (for...of con await) perché si aggiungono
- *   le card al DOM man mano che le risposte arrivano (effetto "waterfall").
+ *   In localStorage il ricettario contiene solo mealId e notes. Per mostrare nome
+ *   e immagine, il controller cerca prima pgrc_meal_details_cache e pgrc_meals_cache;
+ *   chiama api.lookupById solo come fallback e salva il dettaglio recuperato.
  *
  * DEVTOOLS — Cosa mostrare in questa pagina:
  *
  *   MODIFICA DATI:
- *     Prima: localStorage → pgrc_users → cerca il tuo utente → vedi email/password attuali
- *     Dopo modifiche salvate: gli stessi campi sono aggiornati nel localStorage
+ *     Prima: localStorage → pgrc_users → cerca il tuo utente → vedi email/hash password
+ *     Dopo modifiche salvate: email, preferiti ed eventuale hash password sono aggiornati
  *
  *   SALVATAGGIO NOTA:
  *     Prima: localStorage → pgrc_cookbooks → [userId] → [{mealId:"...", notes:""}]
@@ -59,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const editProfileBtn = document.getElementById('edit-profile-btn');   // Pulsante "Modifica Dati"
     const deleteProfileBtn = document.getElementById('delete-profile-btn'); // Pulsante "Rimuovi Profilo"
     const updateForm = document.getElementById('update-form');            // <form> di modifica
-    const updateSuccessMsg = document.getElementById('update-success');   // Messaggio conferma
+    const updateMessage = document.getElementById('update-message');      // Messaggi form profilo
     // ─── Riferimenti DOM — Sezione Ricettario ────────────────────────────────
     const cookbookContainer = document.getElementById('cookbook-container'); // griglia Bootstrap row
     const cookbookMessage = document.getElementById('cookbook-message');     // messaggio se vuoto
@@ -92,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   2. Estrae l'array del ricettario dell'utente corrente (o [] se vuoto)
      *   3. Se vuoto → mostra messaggio → exit
      *   4. Per ogni elemento del ricettario:
-     *      a. Chiama api.lookupById(mealId) → aspetta la risposta
+     *      a. Recupera il dettaglio da cache Web Storage o fallback API
      *      b. Se la risposta è valida → crea e appende una Bootstrap Card col
      *      c. La card contiene: nome linkato, textarea per la nota, pulsante salva
      *
@@ -120,6 +118,24 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   Questo permette al listener (vedi sotto) di sapere quale ricetta
      *   corrisponde a quale nota, senza dover eseguire un'altra chiamata API.
      */
+    async function getCookbookMeal(mealId) {
+        const cachedDetail = getMealDetailCache(mealId);
+        if (cachedDetail) return cachedDetail;
+
+        const catalogMeal = findMealInCatalogCache(mealId);
+        if (catalogMeal) {
+            saveMealDetailCache(catalogMeal);
+            return catalogMeal;
+        }
+
+        const data = await api.lookupById(mealId);
+        if (!data || !data.meals) return null;
+
+        const meal = data.meals[0];
+        saveMealDetailCache(meal);
+        return meal;
+    }
+
     async function loadCookbook() {
         const cookbooks = getCookbooks();
         const userCookbook = cookbooks[currentUser.id] || [];
@@ -132,11 +148,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         cookbookMessage.textContent = ''; // Nascondi il messaggio
 
-        // Ciclo sequenziale: aspetta ogni API call prima di passare alla successiva
+        // Ciclo sequenziale: mantiene l'ordine del ricettario anche con fallback API
         for (const recipeInfo of userCookbook) {
-            const data = await api.lookupById(recipeInfo.mealId);
-            if (data && data.meals) {
-                const meal = data.meals[0];
+            const meal = await getCookbookMeal(recipeInfo.mealId);
+            if (meal) {
                 const col = document.createElement('div');
                 col.className = 'col';
                 col.innerHTML = `
@@ -241,7 +256,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('update-favorites').value = currentUser.favoriteDishes || '';
         // La password NON viene precompilata per sicurezza: si cambia solo se
         // l'utente inserisce un nuovo valore nel campo
+        document.getElementById('update-current-password').value = '';
+        document.getElementById('update-password').value = '';
     });
+
+    function showUpdateMessage(message, type = 'success') {
+        updateMessage.textContent = message;
+        updateMessage.classList.remove('text-success', 'text-danger');
+        updateMessage.classList.add(type === 'success' ? 'text-success' : 'text-danger');
+    }
 
     // =========================================================================
     // EVENT LISTENER: submit del form di modifica profilo
@@ -251,14 +274,14 @@ document.addEventListener('DOMContentLoaded', async () => {
      *
      * FLUSSO:
      *   1. e.preventDefault() blocca il reload della pagina
-     *   2. Legge i valori dei 3 campi (email, password, piatti preferiti)
+     *   2. Legge email, password attuale, nuova password e piatti preferiti
      *   3. Trova l'utente nell'array tramite il suo ID
-     *   4. Aggiorna solo email e password SE i campi non sono vuoti
-     *      (campo vuoto = "non cambiare")
-     *   5. Aggiorna sempre i piatti preferiti (possono diventare stringa vuota)
-     *   6. Salva l'array aggiornato in localStorage
-     *   7. Mostra messaggio di successo verde
-     *   8. Dopo 2 secondi: ricarica la pagina con location.reload()
+     *   4. Se c'è una nuova password, verifica prima la password attuale
+     *   5. Salva solo passwordSalt/passwordHash/passwordAlgorithm, mai il testo in chiaro
+     *   6. Aggiorna email se compilata e sempre i piatti preferiti
+     *   7. Salva l'array aggiornato in localStorage
+     *   8. Mostra messaggio di successo verde
+     *   9. Dopo 2 secondi: ricarica la pagina con location.reload()
      *      (così i <span> mostrano i dati aggiornati senza logica aggiuntiva)
      *
      * PERCHÉ location.reload() invece di aggiornare i <span> direttamente?
@@ -266,12 +289,13 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   e legge i dati aggiornati da localStorage.
      *
      * DEVTOOLS — Dopo aver salvato modifiche:
-     *   localStorage → pgrc_users → cerca il tuo ID → email e/o password aggiornate
+     *   localStorage → pgrc_users → cerca il tuo ID → email e/o passwordHash aggiornati
      */
-    updateForm.addEventListener('submit', (e) => {
+    updateForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const newEmail = document.getElementById('update-email').value;
+        const currentPassword = document.getElementById('update-current-password').value;
         const newPassword = document.getElementById('update-password').value;
         const newFavorites = document.getElementById('update-favorites').value;
 
@@ -279,17 +303,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         const userIndex = users.findIndex(u => u.id === currentUser.id);
 
         if (userIndex > -1) {
+            if (newPassword) {
+                if (!currentPassword) {
+                    showUpdateMessage('Inserisci la password attuale per impostarne una nuova.', 'danger');
+                    return;
+                }
+
+                const currentPasswordIsValid = await auth.verifyPassword(users[userIndex], currentPassword);
+                if (!currentPasswordIsValid) {
+                    showUpdateMessage('Password attuale non corretta.', 'danger');
+                    return;
+                }
+
+                const credential = await auth.createPasswordCredential(newPassword);
+                Object.assign(users[userIndex], credential);
+                delete users[userIndex].password; // rimuove eventuale campo legacy in chiaro
+            }
+
             // Aggiorna solo se il campo non è vuoto (campo vuoto = nessuna modifica)
             if (newEmail) users[userIndex].email = newEmail;
-            if (newPassword) users[userIndex].password = newPassword;
             // I piatti preferiti vengono SEMPRE aggiornati (anche se svuotati)
             users[userIndex].favoriteDishes = newFavorites;
 
             saveUsers(users); // Persiste in localStorage
 
-            updateSuccessMsg.textContent = 'Dati aggiornati con successo!';
+            showUpdateMessage('Dati aggiornati con successo!');
             setTimeout(() => {
-                updateSuccessMsg.textContent = ''; // Resetta il messaggio
+                updateMessage.textContent = ''; // Resetta il messaggio
                 location.reload(); // Ricarica la pagina per mostrare i dati aggiornati
             }, 2000);
         }
@@ -308,9 +348,9 @@ document.addEventListener('DOMContentLoaded', async () => {
      *      (itera su ogni mealId e filtra via le recensioni con userId corrispondente)
      *   4. Chiama auth.logout() → svuota sessionStorage → redirect a index.html
      *
-     * CONFERMA con window.confirm():
-     *   Mostra una finestra di dialogo nativa del browser con OK/Annulla.
-     *   Se l'utente preme Annulla → !confirm() è true → return → nessuna azione.
+     * CONFERMA con ui.confirm():
+     *   Mostra la modale Bootstrap condivisa definita in ui.js.
+     *   Se l'utente annulla, confirmed è false e non viene modificato nulla.
      *   Questa è l'unica azione distruttiva irreversibile dell'app, quindi la
      *   conferma è giustificata.
      *
@@ -320,8 +360,18 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   pgrc_reviews → tutte le recensioni dell'utente sono state filtrate via
      *   sessionStorage → vuoto (il logout l'ha svuotato)
      */
-    deleteProfileBtn.addEventListener('click', () => {
-        if (!confirm('Sei sicuro di voler eliminare il tuo profilo? Questa azione è irreversibile.')) return;
+    deleteProfileBtn.addEventListener('click', async () => {
+        const confirmed = typeof ui !== 'undefined'
+            ? await ui.confirm({
+                title: 'Rimuovi profilo',
+                message: 'Sei sicuro di voler eliminare il profilo? L’operazione rimuove anche ricettario e recensioni.',
+                confirmText: 'Rimuovi',
+                confirmVariant: 'btn-danger',
+                iconClass: 'bi bi-trash'
+            })
+            : confirm('Sei sicuro di voler eliminare il tuo profilo? Questa azione è irreversibile.');
+
+        if (!confirmed) return;
 
         // 1. Rimuove utente dall'array (filter crea un nuovo array senza l'utente)
         saveUsers(getUsers().filter(u => u.id !== currentUser.id));
