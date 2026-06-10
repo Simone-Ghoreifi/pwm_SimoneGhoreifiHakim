@@ -45,6 +45,55 @@
     font-size: 1.25rem;
 }
 
+.navbar-brand-home {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.navbar-brand-home::after {
+    content: "Home";
+    position: absolute;
+    left: 50%;
+    bottom: -1.35rem;
+    transform: translateX(-50%);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(0, 0, 0, 0.28);
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    white-space: nowrap;
+}
+
+.navbar-brand-home:hover::after,
+.navbar-brand-home:focus-visible::after {
+    opacity: 1;
+}
+
+.pgrc-modal {
+    border: 0;
+    border-radius: 8px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+}
+
+.pgrc-modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 2.25rem;
+    border-radius: 50%;
+    color: #008B8B;
+    background: rgba(0, 139, 139, 0.12);
+    font-size: 1.25rem;
+}
+
 /* Card login/registrazione */
 .login-card {
     width: 100%;

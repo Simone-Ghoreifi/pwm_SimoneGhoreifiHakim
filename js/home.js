@@ -4,14 +4,14 @@
  * =============================================================================
  *
  * Gestisce tutta la logica interattiva della pagina di ricerca:
- *   - Popolamento dinamico dei filtri (categorie e aree) tramite API
- *   - Ricerca per nome, per ingrediente, per categoria, per area
- *   - Caricamento dell'intero catalogo con caching in localStorage
+ *   - Popolamento dinamico dei filtri (categorie e aree) con cache localStorage
+ *   - Ricerca per nome, ingrediente, categoria, area e iniziale
+ *   - Caricamento dell'intero catalogo in localStorage allo startup della home
  *   - Rendering dei risultati come Bootstrap Cards
  *
  * DIPENDENZE (caricate prima in home.html):
  *   - api.js      (oggetto `api` con tutti gli endpoint TheMealDB)
- *   - storage.js  (getMealsCache, saveMealsCache)
+ *   - storage.js  (cache catalogo, categorie e aree)
  *   - auth.js     (auth.checkAuth per proteggere la pagina)
  *
  * ELEMENTI DOM GESTITI:
@@ -19,11 +19,12 @@
  *   #search-input     → <input text> campo di testo libero
  *   #category-filter  → <select> filtro categoria (popolato dinamicamente)
  *   #area-filter      → <select> filtro area geografica (popolato dinamicamente)
+ *   #letter-filter    → <select> filtro lettera iniziale A-Z
  *   #results-container→ <div> griglia Bootstrap dove vengono iniettate le card
  *   #search-message   → <p> per messaggi di stato ("Caricamento...", "Nessun risultato")
  *
  * =============================================================================
- * LOGICA DI RICERCA — Le 5 modalità mutuamente esclusive:
+ * LOGICA DI RICERCA — Le modalità mutuamente esclusive:
  * =============================================================================
  *
  *   1. CATEGORIA selezionata → api.filterByCategory()
@@ -32,13 +33,16 @@
  *   2. AREA selezionata → api.filterByArea()
  *      (svuota testo e categoria)
  *
- *   3. TESTO + tipo "nome" → api.searchByName()
+ *   3. LETTERA selezionata → api.filterByStartLetter()
+ *      (svuota testo, categoria e area)
+ *
+ *   4. TESTO + tipo "nome" → api.searchByName()
  *      (con debounce 500ms)
  *
- *   4. TESTO + tipo "ingrediente" → api.searchByIngredient()
+ *   5. TESTO + tipo "ingrediente" → api.searchByIngredient()
  *      (con debounce 500ms)
  *
- *   5. NESSUN FILTRO → loadAllMeals() → catalogo completo con cache localStorage
+ *   6. NESSUN FILTRO → loadAllMeals() → catalogo completo con cache localStorage
  *
  * =============================================================================
  */
@@ -55,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchType = document.getElementById('search-type');       // select "Per Nome/Ingrediente"
     const categoryFilter = document.getElementById('category-filter');
     const areaFilter = document.getElementById('area-filter');
+    const letterFilter = document.getElementById('letter-filter');
     const resultsContainer = document.getElementById('results-container'); // la griglia Bootstrap row
     const searchMessage = document.getElementById('search-message');
 
@@ -63,48 +68,89 @@ document.addEventListener('DOMContentLoaded', () => {
     // continua a digitare prima che il precedente sia scaduto.
     let debounceTimer;
 
+    function setSearchControlsDisabled(disabled) {
+        [searchInput, searchType, categoryFilter, areaFilter, letterFilter].forEach(control => {
+            control.disabled = disabled;
+        });
+    }
+
+    function resetSelectOptions(selectElement) {
+        while (selectElement.options.length > 1) {
+            selectElement.remove(1);
+        }
+    }
+
+    function appendOptions(selectElement, items, getValue) {
+        resetSelectOptions(selectElement);
+        items.forEach(item => {
+            const value = getValue(item);
+            if (!value) return;
+
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = value;
+            selectElement.appendChild(opt);
+        });
+    }
+
+    function getCachedMealsByPredicate(predicate) {
+        const cachedMeals = getMealsCache();
+        return cachedMeals ? cachedMeals.filter(predicate) : null;
+    }
+
+    function mealHasIngredient(meal, searchTerm) {
+        const normalizedTerm = searchTerm.toLowerCase();
+
+        for (let i = 1; i <= 20; i++) {
+            const ingredient = meal[`strIngredient${i}`];
+            if (ingredient && ingredient.toLowerCase().includes(normalizedTerm)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // =========================================================================
     // FUNZIONE: populateFilters
     // =========================================================================
     /**
-     * Popola i due menù a tendina (categoria e area) con i dati dell'API.
+     * Popola i due menù a tendina (categoria e area) con dati salvati nel Web Storage.
      * Viene chiamata UNA SOLA VOLTA al caricamento della pagina.
      *
      * FLUSSO:
-     *   1. Chiama api.listAllCategories() → aspetta la risposta
-     *   2. Per ogni categoria crea un <option> e lo appende al <select> categorie
-     *   3. Chiama api.listAllAreas() → aspetta la risposta
-     *   4. Per ogni area crea un <option> e lo appende al <select> aree
+     *   1. Prova a leggere pgrc_categories_cache
+     *   2. Se manca/scade, chiama api.listAllCategories() e salva la cache
+     *   3. Per ogni categoria crea un <option> e lo appende al <select> categorie
+     *   4. Prova a leggere pgrc_areas_cache
+     *   5. Se manca/scade, chiama api.listAllAreas() e salva la cache
+     *   6. Per ogni area crea un <option> e lo appende al <select> aree
      *
      * NOTA: i <select> in HTML hanno già un'opzione di default ("Tutte le Categorie"
      * e "Tutte le Aree") con valore "" — questa non viene toccata qui.
      *
-     * DEVTOOLS — Network:
-     *   Si vedranno 2 chiamate Fetch: una a categories.php e una a list.php?a=list
-     *   queste vengono eseguite OGNI volta che si carica home.html perché
-     *   NON sono incluse nella cache pgrc_meals_cache (hanno dati diversi)
+     * DEVTOOLS:
+     *   Alla prima visita appaiono pgrc_categories_cache e pgrc_areas_cache.
+     *   Alle visite successive i filtri sono popolati senza chiamate API finché
+     *   la cache non scade.
      */
     async function populateFilters() {
-        const categoriesData = await api.listAllCategories();
-        if (categoriesData && categoriesData.categories) {
-            categoriesData.categories.forEach(cat => {
-                const opt = document.createElement('option');
-                opt.value = cat.strCategory;     // Es. "Seafood", "Dessert"
-                opt.textContent = cat.strCategory;
-                categoryFilter.appendChild(opt);
-            });
+        let categories = getCategoriesCache();
+        if (!categories) {
+            const categoriesData = await api.listAllCategories();
+            categories = categoriesData && categoriesData.categories ? categoriesData.categories : [];
+            if (categories.length > 0) saveCategoriesCache(categories);
         }
+        appendOptions(categoryFilter, categories, category => category.strCategory);
 
-        const areasData = await api.listAllAreas();
-        if (areasData && areasData.meals) {
+        let areas = getAreasCache();
+        if (!areas) {
+            const areasData = await api.listAllAreas();
             // NOTA: l'API restituisce le aree dentro "meals" (non "areas")
-            areasData.meals.forEach(area => {
-                const opt = document.createElement('option');
-                opt.value = area.strArea;     // Es. "Italian", "Japanese"
-                opt.textContent = area.strArea;
-                areaFilter.appendChild(opt);
-            });
+            areas = areasData && areasData.meals ? areasData.meals : [];
+            if (areas.length > 0) saveAreasCache(areas);
         }
+        appendOptions(areaFilter, areas, area => area.strArea);
     }
 
     // =========================================================================
@@ -189,12 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * @returns {Promise<Array>} Array di tutti i pasti del catalogo
      *
      * DEVTOOLS — PRIMA VISITA:
-     *   Scheda Network: vedrai 26 + 2 (categorie + aree) = 28 richieste Fetch
-     *   Application → localStorage → pgrc_meals_cache: oggetto con timestamp e meals[]
+     *   Scheda Network: vedrai le chiamate A-Z, categorie e aree se cache assenti
+     *   Application → localStorage → pgrc_meals_cache, pgrc_categories_cache, pgrc_areas_cache
      *
      * DEVTOOLS — VISITE SUCCESSIVE (cache valida):
-     *   Scheda Network: solo 2 richieste (categorie + aree), NESSUNA per le ricette
-     *   → questo dimostra al prof che la cache funziona!
+     *   La home legge catalogo e filtri dal Web Storage, senza chiamate API.
      *
      * Per verificare l'età della cache in Console:
      *   const c = JSON.parse(localStorage.getItem('pgrc_meals_cache'));
@@ -235,11 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
      *
      * LOGICA CONDIZIONALE (ordine importante — le condizioni sono mutuamente esclusive):
      *
-     *   if (categoria selezionata)       → filterByCategory
-     *   else if (area selezionata)       → filterByArea
+     *   if (categoria selezionata)       → filtra pgrc_meals_cache o fallback API
+     *   else if (area selezionata)       → filtra pgrc_meals_cache o fallback API
+     *   else if (lettera selezionata)    → filtra pgrc_meals_cache o fallback API
      *   else if (testo inserito)
-     *     if (tipo = ingrediente)        → searchByIngredient
-     *     else (tipo = nome, default)    → searchByName
+     *     if (tipo = ingrediente)        → filtra ingredienti cache o fallback API
+     *     else (tipo = nome, default)    → filtra nomi cache o fallback API
      *   else (nessun filtro)             → loadAllMeals (con cache)
      *
      * I filtri a tendina e il testo vengono svuotati l'uno quando si usa l'altro
@@ -249,6 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchTerm = searchInput.value.trim(); // .trim() rimuove spazi iniziali/finali
         const category = categoryFilter.value;       // "" se "Tutte le Categorie"
         const area = areaFilter.value;               // "" se "Tutte le Aree"
+        const startLetter = letterFilter.value;       // "" se "Tutte"
         const type = searchType.value;               // "name" o "ingredient"
 
         // Reset UI
@@ -258,25 +305,46 @@ document.addEventListener('DOMContentLoaded', () => {
         let meals = null;
 
         if (category) {
-            // Filtro categoria attivo: ignora testo e area
-            const data = await api.filterByCategory(category);
-            meals = data ? data.meals : null;
+            // Prima usa il catalogo in localStorage; API solo se la cache non c'è.
+            meals = getCachedMealsByPredicate(meal => meal.strCategory === category);
+            if (!meals) {
+                const data = await api.filterByCategory(category);
+                meals = data ? data.meals : null;
+            }
 
         } else if (area) {
-            // Filtro area attivo: ignora testo e categoria
-            const data = await api.filterByArea(area);
-            meals = data ? data.meals : null;
+            meals = getCachedMealsByPredicate(meal => meal.strArea === area);
+            if (!meals) {
+                const data = await api.filterByArea(area);
+                meals = data ? data.meals : null;
+            }
+
+        } else if (startLetter) {
+            meals = getCachedMealsByPredicate(meal => (
+                meal.strMeal && meal.strMeal.toLowerCase().startsWith(startLetter)
+            ));
+            if (!meals) {
+                const data = await api.filterByStartLetter(startLetter);
+                meals = data ? data.meals : null;
+            }
 
         } else if (searchTerm) {
             // Testo inserito: comportamento dipende dal tipo selezionato
             if (type === 'ingredient') {
-                // Ricerca per ingrediente (es. "chicken", "tomato")
-                const data = await api.searchByIngredient(searchTerm);
-                meals = data ? data.meals : null;
+                meals = getCachedMealsByPredicate(meal => mealHasIngredient(meal, searchTerm));
+                if (!meals) {
+                    const data = await api.searchByIngredient(searchTerm);
+                    meals = data ? data.meals : null;
+                }
             } else {
-                // Ricerca per nome (default, es. "pasta", "curry")
-                const data = await api.searchByName(searchTerm);
-                meals = data ? data.meals : null;
+                const normalizedTerm = searchTerm.toLowerCase();
+                meals = getCachedMealsByPredicate(meal => (
+                    meal.strMeal && meal.strMeal.toLowerCase().includes(normalizedTerm)
+                ));
+                if (!meals) {
+                    const data = await api.searchByName(searchTerm);
+                    meals = data ? data.meals : null;
+                }
             }
         } else {
             // Nessun filtro attivo: carica tutto il catalogo (con cache)
@@ -319,6 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('input', () => {
         categoryFilter.value = '';  // Deseleziona categoria
         areaFilter.value = '';      // Deseleziona area
+        letterFilter.value = '';    // Deseleziona lettera iniziale
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(performSearch, 500); // 500ms di debounce
     });
@@ -332,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     categoryFilter.addEventListener('change', () => {
         searchInput.value = ''; // Svuota il campo testo
         areaFilter.value = '';  // Deseleziona area
+        letterFilter.value = ''; // Deseleziona lettera iniziale
         performSearch();        // Ricerca immediata
     });
 
@@ -342,13 +412,34 @@ document.addEventListener('DOMContentLoaded', () => {
     areaFilter.addEventListener('change', () => {
         searchInput.value = '';    // Svuota il campo testo
         categoryFilter.value = ''; // Deseleziona categoria
+        letterFilter.value = '';   // Deseleziona lettera iniziale
         performSearch();           // Ricerca immediata
     });
 
-    // ─── AVVIO: popolamento filtri + caricamento iniziale ────────────────────
-    // Queste due chiamate avvengono in parallelo (entrambe sono async, non si
-    // aspettano l'una con l'altra). populateFilters popola i menù in background
-    // mentre performSearch carica il catalogo completo.
-    populateFilters(); // Popola i select di categoria e area (2 chiamate API)
-    performSearch();   // Carica il catalogo completo o dalla cache (0-26 chiamate API)
+    /**
+     * LISTENER: cambio del filtro per lettera iniziale.
+     * Svuota gli altri criteri e interroga l'endpoint search.php?f={letter}.
+     */
+    letterFilter.addEventListener('change', () => {
+        searchInput.value = '';
+        categoryFilter.value = '';
+        areaFilter.value = '';
+        performSearch();
+    });
+
+    async function initializeRecipeData() {
+        setSearchControlsDisabled(true);
+        try {
+            await Promise.all([
+                populateFilters(),
+                performSearch()
+            ]);
+        } finally {
+            setSearchControlsDisabled(false);
+        }
+    }
+
+    // ─── AVVIO: startup della prima pagina applicativa autenticata ───────────
+    // Qui vengono preparati catalogo, categorie e aree nel Web Storage.
+    initializeRecipeData();
 });

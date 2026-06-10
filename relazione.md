@@ -61,6 +61,7 @@ Il secondo macro-scenario richiede la possibilità di cercare ricette tramite di
 - **Ricerca per ingrediente**: ricerca filtrando per ingrediente principale, tramite endpoint dedicato dell'API.
 - **Filtro per categoria**: selezione da menù a tendina popolato dinamicamente dalle categorie disponibili in TheMealDB.
 - **Filtro per area geografica**: selezione da menù a tendina popolato dinamicamente con le aree geografiche disponibili.
+- **Filtro per lettera iniziale**: selezione A-Z tramite endpoint `search.php?f=`.
 - **Visualizzazione di tutte le ricette**: in assenza di criteri attivi, l'applicazione mostra l'intero catalogo, scaricato in parallelo iterando sull'alfabeto e memorizzato in cache.
 
 Per ogni ricetta nella scheda dettagliata vengono mostrati: immagine, categoria, area di origine, lista degli ingredienti con relative misure, procedimento di preparazione, e recensioni degli utenti.
@@ -113,6 +114,7 @@ Ogni pagina HTML carica i livelli necessari nell'ordine corretto tramite tag `<s
 ```
 /
 ├── index.html          # Pagina di login e registrazione
+├── first-login.html    # Pagina di convalida UI dopo registrazione
 ├── home.html           # Pagina di ricerca ricette
 ├── recipe.html         # Pagina di dettaglio ricetta e recensioni
 ├── profile.html        # Area personale e ricettario
@@ -127,7 +129,9 @@ Ogni pagina HTML carica i livelli necessari nell'ordine corretto tramite tag `<s
 │   ├── storage.js      # Livello dati: tutte le operazioni su localStorage
 │   ├── api.js          # Livello API: wrapper degli endpoint TheMealDB
 │   ├── auth.js         # Livello autenticazione: registro, login, logout, checkAuth
+│   ├── ui.js           # Componenti UI condivisi, inclusa la modale di conferma
 │   ├── login.js        # Controller: gestisce index.html
+│   ├── first-login.js  # Controller: gestisce first-login.html
 │   ├── home.js         # Controller: gestisce home.html
 │   ├── recipe.js       # Controller: gestisce recipe.html
 │   └── profile.js      # Controller: gestisce profile.html
@@ -151,21 +155,25 @@ La pagina di accesso presenta una singola card centrata nella viewport. Al suo i
 
 Il form di registrazione raccoglie: username, email, password (minimo 6 caratteri) e piatti preferiti (campo facoltativo). La validazione di base è delegata agli attributi HTML5 (`required`, `type="email"`, `minlength`).
 
+In caso di registrazione corretta, l'utente viene reindirizzato a `first-login.html`, una pagina intermedia che conferma la creazione dell'account e richiede il primo login esplicito. In questa fase non viene creata alcuna sessione in `sessionStorage`.
+
 Se l'utente è già autenticato (sessionStorage non vuoto), viene reindirizzato immediatamente a `home.html` prima che il DOM sia reso visibile, evitando un flash di contenuto non pertinente.
 
 ### 5.2 `home.html` — Ricerca Ricette
 
 La pagina di ricerca è strutturata in due aree verticali:
 
-1. **Barra di ricerca e filtri**: un input-group Bootstrap composto dal selettore del tipo di ricerca ("Per Nome" / "Per Ingrediente") e dall'input testuale, affiancati da due select per categoria e area geografica. I filtri vengono popolati dinamicamente all'avvio tramite chiamate API.
+1. **Barra di ricerca e filtri**: un input-group Bootstrap composto dal selettore del tipo di ricerca ("Per Nome" / "Per Ingrediente") e dall'input testuale, affiancati da select per categoria, area geografica e lettera iniziale. Categoria e area vengono popolate leggendo prima le rispettive cache in localStorage, con chiamate API solo in caso di cache assente o scaduta.
 
 2. **Griglia risultati**: un container `<div>` con classi Bootstrap `row row-cols-*` che viene riempito dinamicamente da JavaScript. Ogni elemento è una Bootstrap Card con immagine, titolo e link alla scheda dettagliata.
 
-La ricerca è **mutualmente esclusiva**: attivare un filtro per categoria o area svuota l'input testuale, e viceversa. La ricerca testuale è dotata di **debounce** a 500ms per limitare le chiamate API durante la digitazione.
+La ricerca è **mutualmente esclusiva**: attivare un filtro per categoria, area o lettera iniziale svuota l'input testuale e gli altri filtri, e viceversa. La ricerca testuale è dotata di **debounce** a 500ms per limitare le chiamate API durante la digitazione.
+
+Per "startup dell'applicazione" si intende l'ingresso nella prima pagina applicativa autenticata (`home.html`), perché prima del login non è necessario visualizzare dati TheMealDB. In questa fase vengono inizializzate le cache del catalogo A-Z, delle categorie e delle aree geografiche.
 
 ### 5.3 `recipe.html` — Dettaglio Ricetta
 
-La pagina riceve l'ID della ricetta come parametro query string (`?id=XXXXX`) e costruisce l'intera sezione dettaglio dinamicamente via JavaScript al caricamento.
+La pagina riceve l'ID della ricetta come parametro query string (`?id=XXXXX`) e costruisce l'intera sezione dettaglio dinamicamente via JavaScript al caricamento. Il dettaglio viene cercato prima in `pgrc_meal_details_cache`, poi nel catalogo `pgrc_meals_cache`, e solo come fallback viene recuperato tramite `api.lookupById()`.
 
 La struttura della pagina comprende due card principali (entrambe contenute nel `<main>`):
 
@@ -179,9 +187,9 @@ Il pulsante ricettario è implementato come toggle: il testo, il colore e l'icon
 
 La pagina è divisa in due sezioni verticali:
 
-1. **Card dati utente** (`#profile-details`): visualizza username, email e piatti preferiti. Contiene un form di modifica nascosto, attivabile tramite il pulsante "Modifica Dati". Il pulsante "Rimuovi Profilo" apre una finestra di conferma nativa del browser prima di procedere.
+1. **Card dati utente** (`#profile-details`): visualizza username, email e piatti preferiti. Contiene un form di modifica nascosto, attivabile tramite il pulsante "Modifica Dati". Il cambio password richiede l'inserimento della password attuale. Il pulsante "Rimuovi Profilo" apre una modale Bootstrap di conferma prima di procedere.
 
-2. **Card ricettario** (`#my-cookbook`): griglia Bootstrap che mostra una card per ogni ricetta nel ricettario. Ogni card include il nome della ricetta linkato alla scheda, una textarea per le note private, e un pulsante "Salva Nota" con feedback visivo inline ("Salvato!" che scompare dopo 2 secondi).
+2. **Card ricettario** (`#my-cookbook`): griglia Bootstrap che mostra una card per ogni ricetta nel ricettario. Ogni card include il nome della ricetta linkato alla scheda, una textarea per le note private, e un pulsante "Salva Nota" con feedback visivo inline ("Salvato!" che scompare dopo 2 secondi). Anche qui nome e immagine della ricetta vengono letti prima dalle cache `pgrc_meal_details_cache`/`pgrc_meals_cache`, con API solo come fallback.
 
 ---
 
@@ -221,7 +229,9 @@ La persistenza dei dati è interamente affidata al Web Storage del browser. Il m
     "id": "user_1712345678900",
     "username": "mario_rossi",
     "email": "mario@example.com",
-    "password": "mypassword",
+    "passwordSalt": "7a8b9c...",
+    "passwordHash": "c5d8e2...",
+    "passwordAlgorithm": "SHA-256",
     "favoriteDishes": "Pizza, Risotto, Tiramisù"
   }
 ]
@@ -261,6 +271,31 @@ La persistenza dei dati è interamente affidata al Web Storage del browser. Il m
 }
 ```
 
+**Chiavi `pgrc_categories_cache` e `pgrc_areas_cache`** — Cache dei filtri:
+```json
+{
+  "timestamp": 1712345678900,
+  "categories": [ { "strCategory": "Seafood", ... } ]
+}
+```
+
+```json
+{
+  "timestamp": 1712345678900,
+  "areas": [ { "strArea": "Italian" }, { "strArea": "Japanese" } ]
+}
+```
+
+**Chiave `pgrc_meal_details_cache`** — Cache dei dettagli ricetta:
+```json
+{
+  "52772": {
+    "timestamp": 1712345678900,
+    "meal": { "idMeal": "52772", "strMeal": "Teriyaki Chicken Casserole", ... }
+  }
+}
+```
+
 **Chiave `pgrc_loggedInUser`** (sessionStorage) — ID utente corrente:
 ```
 "user_1712345678900"
@@ -268,7 +303,7 @@ La persistenza dei dati è interamente affidata al Web Storage del browser. Il m
 
 ### 7.2 Cache delle ricette
 
-Caricare l'intero catalogo TheMealDB richiede 26 chiamate HTTP in parallelo (una per lettera dell'alfabeto). Per evitare di ripetere questa operazione a ogni visita, il risultato viene serializzato in JSON e salvato in `localStorage` con un timestamp. Ad ogni caricamento della home, la funzione `getMealsCache()` verifica se la cache esiste e se il timestamp è più recente di 1 ora (3.600.000 ms). In caso affermativo, i dati vengono serviti dalla cache; altrimenti si effettua un nuovo fetch e la cache viene aggiornata.
+Caricare l'intero catalogo TheMealDB richiede 26 chiamate HTTP in parallelo (una per lettera dell'alfabeto). Per evitare di ripetere questa operazione a ogni visita, il risultato viene serializzato in JSON e salvato in `localStorage` con un timestamp. Lo stesso approccio è applicato a categorie, aree geografiche e dettagli delle ricette aperte. Ad ogni caricamento della home, `storage.js` verifica se le cache esistono e se il timestamp è più recente di 1 ora (3.600.000 ms). In caso affermativo, i dati vengono serviti dalla cache; altrimenti si effettua un nuovo fetch e la cache viene aggiornata.
 
 Questo meccanismo rispetta il requisito del documento di specifica che richiede esplicitamente che i dati siano "scaricati dalle API di TheMealDB, memorizzati nel web storage, e visualizzati nell'applicazione web".
 
@@ -286,27 +321,28 @@ Il processo di registrazione esegue due validazioni lato client prima di persist
 1. Controllo unicità dello username (confronto case-insensitive su tutti gli utenti esistenti).
 2. Controllo unicità dell'email (confronto case-insensitive).
 
-In caso di successo, il nuovo utente viene aggiunto all'array `pgrc_users` e viene creata una entry vuota in `pgrc_cookbooks`. Immediatamente dopo la registrazione viene eseguito automaticamente il login, evitando all'utente di dover inserire nuovamente le credenziali.
+In caso di successo, il nuovo utente viene aggiunto all'array `pgrc_users` e viene creata una entry vuota in `pgrc_cookbooks`. La registrazione non effettua auto-login: l'utente viene reindirizzato alla pagina `first-login.html`, che conferma la creazione dell'account e richiede il primo accesso esplicito.
 
-Il login esegue una ricerca nell'array degli utenti confrontando username (case-insensitive) e password. In caso di match, l'ID utente viene salvato in `sessionStorage`.
+Il login esegue una ricerca nell'array degli utenti confrontando prima lo username in modo case-insensitive. Se lo username non esiste viene mostrato il messaggio dedicato "Username non registrato presso il nostro db."; se invece lo username esiste, viene verificata la password confrontando l'hash calcolato con `passwordHash`. In caso di match, l'ID utente viene salvato in `sessionStorage`.
 
-**Nota sulla sicurezza:** Le password sono salvate in chiaro nel `localStorage`. In un'applicazione reale ciò sarebbe inaccettabile; tuttavia, trattandosi di un'applicazione puramente client-side senza back-end, non è possibile implementare un hashing sicuro (come bcrypt) lato server. Questa limitazione è intrinseca all'architettura scelta e viene accettata nel contesto del progetto universitario.
+**Nota sulla sicurezza:** Le password non vengono salvate in chiaro nel `localStorage`. Il progetto genera un salt per utente e salva `passwordSalt`, `passwordHash` e `passwordAlgorithm`. In un'applicazione reale l'hashing dovrebbe comunque essere gestito lato server con algoritmi dedicati come bcrypt/Argon2, perché il client resta ispezionabile e modificabile.
 
 ### 8.2 Ricerca e filtri nella Home
 
-La ricerca è implementata con quattro modalità mutuamente esclusive, gestite dalla funzione asincrona `performSearch()`:
+La ricerca è implementata con modalità mutuamente esclusive, gestite dalla funzione asincrona `performSearch()`:
 
-1. **Filtro categoria attivo**: chiamata `api.filterByCategory()`.
-2. **Filtro area attivo**: chiamata `api.filterByArea()`.
-3. **Testo inserito, tipo "nome"**: chiamata `api.searchByName()`.
-4. **Testo inserito, tipo "ingrediente"**: chiamata `api.searchByIngredient()`.
-5. **Nessun filtro attivo**: caricamento completo del catalogo tramite `loadAllMeals()` (con cache).
+1. **Filtro categoria attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByCategory()`.
+2. **Filtro area attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByArea()`.
+3. **Filtro lettera iniziale attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByStartLetter()`.
+4. **Testo inserito, tipo "nome"**: filtro locale sul nome, con fallback `api.searchByName()`.
+5. **Testo inserito, tipo "ingrediente"**: filtro locale sui campi `strIngredient1...20`, con fallback `api.searchByIngredient()`.
+6. **Nessun filtro attivo**: caricamento completo del catalogo tramite `loadAllMeals()` (con cache).
 
 Quando l'utente attiva un filtro a tendina, l'input testuale viene svuotato e viceversa, per garantire la mutua esclusività. La ricerca testuale utilizza un meccanismo di **debounce** (ritardo di 500ms) implementato con `setTimeout`/`clearTimeout`, per evitare di inviare una chiamata API a ogni singola lettera digitata.
 
 ### 8.3 Scheda Ricetta e Ricettario
 
-Al caricamento di `recipe.html`, l'ID viene letto dai parametri URL tramite `URLSearchParams`. Viene poi chiamato `api.lookupById()` e il contenuto della card viene generato dinamicamente via `innerHTML`.
+Al caricamento di `recipe.html`, l'ID viene letto dai parametri URL tramite `URLSearchParams`. Il controller prova prima a leggere il dettaglio da `pgrc_meal_details_cache`; se non lo trova, cerca la ricetta nel catalogo completo `pgrc_meals_cache`; se anche questo fallisce, chiama `api.lookupById()` e salva il risultato in localStorage. Il contenuto della card viene poi generato dinamicamente via `innerHTML`.
 
 Il pulsante di aggiunta/rimozione dal ricettario accede all'oggetto `pgrc_cookbooks` in localStorage, trova il ricettario dell'utente corrente tramite il suo ID, e aggiunge o rimuove la ricetta (identificata da `mealId`). L'aggiornamento del pulsante è immediato: classe CSS, icona Bootstrap Icons e testo cambiano senza ricaricare la pagina.
 
@@ -383,9 +419,9 @@ La scelta di usare JavaScript puro (ES6+) senza React, Vue o altri framework è 
 
 In assenza di un back-end, localStorage è l'unica opzione per la persistenza cross-sessione. La sua struttura piatta (chiave/valore stringa) è stata compensata dall'uso di JSON serializzato/deserializzato, con funzioni dedicate nel modulo `storage.js` che isolano il codice di I/O dal resto dell'applicazione.
 
-### Cache con TTL sul catalogo ricette
+### Cache con TTL sui dati TheMealDB
 
-Il catalogo completo TheMealDB richiede 26 chiamate API in parallelo. Effettuarle a ogni caricamento della pagina home sarebbe inefficiente e potrebbe portare a limitazioni di rate da parte del server. La cache con TTL di 1 ora bilancia freschezza dei dati e numero di richieste di rete.
+Il catalogo completo TheMealDB richiede 26 chiamate API in parallelo. Effettuarle a ogni caricamento della pagina home sarebbe inefficiente e potrebbe portare a limitazioni di rate da parte del server. Per coerenza con il requisito sul Web Storage, vengono salvati anche categorie, aree geografiche e dettagli ricetta. La cache con TTL di 1 ora bilancia freschezza dei dati e numero di richieste di rete.
 
 ### Delegazione degli eventi nel ricettario
 
@@ -399,7 +435,7 @@ La ricerca testuale è collegata all'evento `input` dell'`<input>` di ricerca, c
 
 ## 11. Limitazioni note
 
-- **Password in chiaro**: come discusso nella sezione 8.1, le password sono salvate non cifrate in localStorage. Questa limitazione è strutturale all'architettura client-only.
+- **Autenticazione client-side**: le password sono salvate come salt+hash, non in chiaro. Rimane però una simulazione accademica senza back-end: chi controlla il browser può comunque ispezionare e modificare il codice o il localStorage.
 - **Nessun back-end**: le operazioni di autenticazione e persistenza sono simulate client-side; chiunque abbia accesso al browser può ispezionare o modificare i dati in localStorage tramite gli strumenti di sviluppo.
 - **Recensioni visibili solo localmente**: le recensioni sono salvate nel localStorage del singolo browser. Non essendoci un server condiviso, le recensioni di un utente non sono visibili ad altri utenti su macchine diverse.
 - **Ricettario locale**: per la stessa ragione, il ricettario e le note personali sono accessibili solo dal browser in cui sono stati creati.
@@ -409,7 +445,7 @@ La ricerca testuale è collegata all'evento `input` dell'`<input>` di ricerca, c
 
 ## 12. Conclusioni
 
-Il progetto PGRC implementa tutte le funzionalità richieste dalla specifica: gestione del profilo utente (inclusi piatti preferiti), ricerca di ricette per nome, ingrediente, categoria e area geografica, gestione del ricettario personale con note private, e sistema di recensioni con data di preparazione e valutazioni a stelle.
+Il progetto PGRC implementa tutte le funzionalità richieste dalla specifica: gestione del profilo utente (inclusi piatti preferiti), ricerca di ricette per nome, ingrediente, categoria, area geografica e lettera iniziale, gestione del ricettario personale con note private, e sistema di recensioni con data di preparazione e valutazioni a stelle.
 
 L'architettura è volutamente semplice e aderente ai vincoli del corso: HTML5, CSS3 e JavaScript puro, senza back-end e senza framework aggiuntivi. L'utilizzo di Bootstrap 5 ha permesso di ottenere un'interfaccia visivamente moderna e responsive senza rinunciare alla separazione struttura/presentazione richiesta dalla specifica. Il caching delle ricette in localStorage migliora le prestazioni percepite e rispetta il requisito di memorizzare i dati API nel web storage del browser.
 
