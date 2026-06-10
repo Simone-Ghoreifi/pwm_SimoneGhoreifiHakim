@@ -19,22 +19,25 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 ├── first-login.html    # Convalida UI dopo registrazione
 ├── home.html           # Ricerca ricette
 ├── recipe.html         # Dettaglio ricetta + recensioni
-├── profile.html        # Area personale + ricettario
+├── cookbook.html       # Ricettario personale + note private
+├── profile.html        # Area personale
 │
 ├── css/
-│   ├── style.css       # Variabili colore + override Bootstrap (tema DarkCyan)
+│   ├── style.css       # Tema dark caldo + override Bootstrap + UI condivisa
+│   ├── cookbook.css    # Card e textarea del ricettario
 │   ├── home.css        # Hover card ricette
 │   ├── recipe.css      # Immagine ricetta responsive
-│   └── profile.css     # Textarea note ricettario
+│   └── profile.css     # Layout card profilo
 │
 ├── js/
 │   ├── storage.js      # CRUD localStorage (utenti, ricettari, recensioni, cache API)
 │   ├── api.js          # Wrapper chiamate TheMealDB REST API
 │   ├── auth.js         # Registrazione, login, logout, checkAuth
-│   ├── ui.js           # Componenti UI riutilizzabili (modale conferma)
+│   ├── ui.js           # Componenti UI riutilizzabili (modali + alert globali)
 │   ├── login.js        # Controller pagina index.html
 │   ├── first-login.js  # Controller pagina first-login.html
 │   ├── home.js         # Controller pagina home.html
+│   ├── cookbook.js     # Controller pagina cookbook.html
 │   ├── recipe.js       # Controller pagina recipe.html
 │   └── profile.js      # Controller pagina profile.html
 │
@@ -78,18 +81,28 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 ### `recipe.html` — Dettaglio Ricetta
 - Immagine, badge categoria/area, lista ingredienti, procedimento completo
 - Dettaglio ricetta letto da `pgrc_meal_details_cache` o `pgrc_meals_cache`, con API solo come fallback
-- Pulsante **Aggiungi / Rimuovi dal Ricettario** (toggle)
+- Pulsante **Aggiungi / Rimuovi dal Ricettario** con modale conferma/annulla
 - Sezione recensioni con stelle Bootstrap Icons (⭐)
 - Form recensione con: data di preparazione, voto difficoltà (1–5), voto gusto (1–5)
 - Un utente può avere una sola recensione per ricetta (sovrascrive)
 
+### `cookbook.html` — Ricettario Personale
+- Pagina dedicata al ricettario, separata dall'area personale
+- Card cliccabili verso `recipe.html?id=...`
+- Note private salvate in `pgrc_cookbooks`
+- Card popolate da cache dettagli/catalogo, con API solo come fallback
+
 ### `profile.html` — Area Personale
-- Visualizzazione dati utente (username, email, piatti preferiti)
-- Form di modifica email, password e piatti preferiti
-- Cambio password consentito solo inserendo prima la password attuale
+- Card centrata con campi username, email, preferiti e password visibili da subito
+- Campi disabilitati di default, sbloccabili con **Modifica Dati**
+- Cambio password mediato da modale con password attuale
 - Eliminazione account (con pulizia ricettario e recensioni)
-- Ricettario personale con note private per ricetta (salvate in localStorage)
-- Card ricettario popolate da cache dettagli/catalogo, con API solo come fallback
+
+### UI condivisa
+- Tema dark di default con palette rosso caldo + crema
+- Navbar fixed sulle pagine autenticate
+- Modale riusabile per conferme e sblocco password
+- Alert globali Bootstrap animati in alto nel viewport
 
 ---
 
@@ -100,7 +113,7 @@ La logica è separata in moduli caricati in sequenza tramite tag `<script>`:
 1. **`storage.js`** — livello dati: tutte le funzioni che leggono/scrivono localStorage. Espone `getUsers`, `getCookbooks`, `getReviews`, `getMealsCache`, ecc.
 2. **`api.js`** — livello API: incapsula tutti gli endpoint TheMealDB in un oggetto `api`. Gestisce errori HTTP con try/catch.
 3. **`auth.js`** — livello autenticazione: oggetto `auth` con `register`, `login`, `logout`, `getCurrentUser`, `checkAuth`. Salva password come salt+hash.
-4. **`ui.js`** — componenti UI condivisi, inclusa la modale di conferma riusabile per logout e rimozione profilo.
+4. **`ui.js`** — componenti UI condivisi: modali conferma/password e alert globali animati.
 5. **`*.js` controller** — ogni pagina ha il proprio controller che legge il DOM e usa i livelli sottostanti.
 
 ### Flusso dati

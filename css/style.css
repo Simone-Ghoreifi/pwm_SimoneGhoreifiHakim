@@ -1,45 +1,215 @@
 /* ===================================================
-   Override colore primario Bootstrap 5 → DarkCyan
+   PGRC theme: dark mode, warm culinary palette
    =================================================== */
 :root {
-    --bs-primary: #008B8B;
-    --bs-primary-rgb: 0, 139, 139;
-    --bs-link-color: #008B8B;
-    --bs-link-hover-color: #006666;
+    --pgrc-bg: #15100f;
+    --pgrc-bg-soft: #1d1715;
+    --pgrc-surface: #261c19;
+    --pgrc-surface-2: #31221e;
+    --pgrc-border: rgba(246, 217, 164, 0.2);
+    --pgrc-text: #fff4df;
+    --pgrc-muted: #cdbb9d;
+    --pgrc-accent: #d94f2b;
+    --pgrc-accent-rgb: 217, 79, 43;
+    --pgrc-accent-dark: #ad351c;
+    --pgrc-cream: #f6d9a4;
+    --pgrc-cream-rgb: 246, 217, 164;
+    --pgrc-danger: #e45f5f;
+    --pgrc-success: #76b97d;
+    --pgrc-info: #d7a957;
+    --bs-body-bg: var(--pgrc-bg);
+    --bs-body-color: var(--pgrc-text);
+    --bs-primary: var(--pgrc-accent);
+    --bs-primary-rgb: var(--pgrc-accent-rgb);
+    --bs-secondary: var(--pgrc-cream);
+    --bs-secondary-rgb: var(--pgrc-cream-rgb);
+    --bs-link-color: var(--pgrc-cream);
+    --bs-link-hover-color: #ffffff;
+    --bs-border-color: var(--pgrc-border);
+}
+
+html {
+    color-scheme: dark;
+}
+
+body {
+    min-height: 100vh;
+    color: var(--pgrc-text);
+    background:
+        radial-gradient(circle at 18% 12%, rgba(var(--pgrc-accent-rgb), 0.18), transparent 28rem),
+        linear-gradient(180deg, #1b1210 0%, var(--pgrc-bg) 42%, #100c0b 100%);
+}
+
+body.app-shell {
+    padding-top: 76px;
+}
+
+.bg-light,
+.bg-white {
+    background-color: var(--pgrc-bg) !important;
+}
+
+.bg-dark {
+    background-color: #0f0b0a !important;
+}
+
+.bg-primary {
+    background: linear-gradient(90deg, #7e2415 0%, var(--pgrc-accent) 52%, #b93b20 100%) !important;
+}
+
+.text-primary {
+    color: var(--pgrc-accent) !important;
+}
+
+.text-muted {
+    color: var(--pgrc-muted) !important;
+}
+
+.text-dark {
+    color: var(--pgrc-text) !important;
+}
+
+.border-primary {
+    border-color: var(--pgrc-accent) !important;
+}
+
+.badge.bg-primary {
+    color: #fff5e5;
+    background-color: var(--pgrc-accent) !important;
+}
+
+.badge.bg-secondary {
+    color: #251814;
+    background-color: var(--pgrc-cream) !important;
+}
+
+.card,
+.modal-content,
+.dropdown-menu {
+    color: var(--pgrc-text);
+    background: linear-gradient(180deg, var(--pgrc-surface) 0%, #211714 100%);
+    border: 1px solid var(--pgrc-border);
+}
+
+.card {
+    border-radius: 8px;
+}
+
+.card-title,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: #fff7e8;
+}
+
+a {
+    color: var(--pgrc-cream);
+}
+
+a:hover {
+    color: #ffffff;
+}
+
+.form-label {
+    color: var(--pgrc-cream);
+}
+
+.form-control,
+.form-select {
+    color: var(--pgrc-text);
+    background-color: #1b1311;
+    border-color: var(--pgrc-border);
+}
+
+.form-control:focus,
+.form-select:focus {
+    color: var(--pgrc-text);
+    background-color: #201714;
+    border-color: rgba(var(--pgrc-cream-rgb), 0.75);
+    box-shadow: 0 0 0 0.2rem rgba(var(--pgrc-accent-rgb), 0.18);
+}
+
+.form-control:disabled,
+.form-select:disabled,
+.form-control[readonly] {
+    color: rgba(255, 244, 223, 0.78);
+    background-color: #191211;
+    border-color: rgba(246, 217, 164, 0.14);
+    opacity: 1;
+}
+
+.form-text {
+    color: var(--pgrc-muted);
+}
+
+.input-group-text {
+    color: var(--pgrc-cream);
+    background-color: #1b1311;
+    border-color: var(--pgrc-border);
+}
+
+.list-group-item {
+    color: var(--pgrc-text);
+    background-color: transparent;
+    border-color: var(--pgrc-border);
 }
 
 .btn-primary {
-    --bs-btn-bg: #008B8B;
-    --bs-btn-border-color: #008B8B;
-    --bs-btn-hover-bg: #006666;
-    --bs-btn-hover-border-color: #006666;
-    --bs-btn-active-bg: #005c5c;
-    --bs-btn-active-border-color: #005c5c;
-    --bs-btn-disabled-bg: #008B8B;
-    --bs-btn-disabled-border-color: #008B8B;
+    --bs-btn-color: #fff7e8;
+    --bs-btn-bg: var(--pgrc-accent);
+    --bs-btn-border-color: var(--pgrc-accent);
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-hover-bg: var(--pgrc-accent-dark);
+    --bs-btn-hover-border-color: var(--pgrc-accent-dark);
+    --bs-btn-active-bg: #8f2b17;
+    --bs-btn-active-border-color: #8f2b17;
+    --bs-btn-disabled-bg: var(--pgrc-accent);
+    --bs-btn-disabled-border-color: var(--pgrc-accent);
 }
 
 .btn-outline-primary {
-    --bs-btn-color: #008B8B;
-    --bs-btn-border-color: #008B8B;
-    --bs-btn-hover-bg: #008B8B;
-    --bs-btn-hover-border-color: #008B8B;
-    --bs-btn-active-bg: #006666;
+    --bs-btn-color: var(--pgrc-cream);
+    --bs-btn-border-color: rgba(var(--pgrc-cream-rgb), 0.65);
+    --bs-btn-hover-color: #251814;
+    --bs-btn-hover-bg: var(--pgrc-cream);
+    --bs-btn-hover-border-color: var(--pgrc-cream);
+    --bs-btn-active-color: #251814;
+    --bs-btn-active-bg: var(--pgrc-cream);
+    --bs-btn-active-border-color: var(--pgrc-cream);
 }
 
-.bg-primary { background-color: #008B8B !important; }
-.text-primary { color: #008B8B !important; }
-.border-primary { border-color: #008B8B !important; }
-.badge.bg-primary { background-color: #008B8B !important; }
+.btn-outline-secondary {
+    --bs-btn-color: var(--pgrc-muted);
+    --bs-btn-border-color: rgba(246, 217, 164, 0.28);
+    --bs-btn-hover-color: var(--pgrc-text);
+    --bs-btn-hover-bg: rgba(246, 217, 164, 0.12);
+    --bs-btn-hover-border-color: rgba(246, 217, 164, 0.4);
+}
 
-/* Navbar links */
+.btn-danger {
+    --bs-btn-bg: #b5392f;
+    --bs-btn-border-color: #b5392f;
+    --bs-btn-hover-bg: #8f2721;
+    --bs-btn-hover-border-color: #8f2721;
+}
+
+.navbar {
+    border-bottom: 1px solid rgba(246, 217, 164, 0.18);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+}
+
 .navbar-dark .navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 244, 223, 0.8);
 }
+
 .navbar-dark .navbar-nav .nav-link:hover,
 .navbar-dark .navbar-nav .nav-link.active {
     color: #ffffff;
 }
+
 .navbar-dark .navbar-brand {
     color: #ffffff;
     font-size: 1.25rem;
@@ -60,10 +230,10 @@
     transform: translateX(-50%);
     padding: 0.1rem 0.45rem;
     border-radius: 999px;
-    color: rgba(255, 255, 255, 0.78);
-    background: rgba(0, 0, 0, 0.28);
+    color: #251814;
+    background: rgba(var(--pgrc-cream-rgb), 0.86);
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.18s ease;
@@ -76,9 +246,18 @@
 }
 
 .pgrc-modal {
-    border: 0;
+    border: 1px solid var(--pgrc-border);
     border-radius: 8px;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
+}
+
+.modal-header,
+.modal-footer {
+    border-color: var(--pgrc-border);
+}
+
+.btn-close {
+    filter: invert(1) grayscale(100%);
 }
 
 .pgrc-modal-icon {
@@ -89,9 +268,69 @@
     height: 2.25rem;
     flex: 0 0 2.25rem;
     border-radius: 50%;
-    color: #008B8B;
-    background: rgba(0, 139, 139, 0.12);
+    color: var(--pgrc-cream);
+    background: rgba(var(--pgrc-accent-rgb), 0.22);
     font-size: 1.25rem;
+}
+
+.pgrc-alert-container {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    z-index: 2000;
+    width: min(92vw, 560px);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.pgrc-alert {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--pgrc-border);
+    border-radius: 8px;
+    color: var(--pgrc-text);
+    background: rgba(38, 28, 25, 0.96);
+    transform: translateY(-18px);
+    opacity: 0;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    pointer-events: auto;
+}
+
+.pgrc-alert.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.pgrc-alert.is-leaving {
+    opacity: 0;
+    transform: translateY(-18px);
+}
+
+.pgrc-alert.alert-success {
+    border-color: rgba(118, 185, 125, 0.55);
+}
+
+.pgrc-alert.alert-danger {
+    border-color: rgba(228, 95, 95, 0.6);
+}
+
+.pgrc-alert.alert-warning,
+.pgrc-alert.alert-info {
+    border-color: rgba(246, 217, 164, 0.55);
+}
+
+.pgrc-alert > .bi {
+    margin-top: 0.15rem;
+    color: var(--pgrc-cream);
+    font-size: 1.25rem;
+}
+
+.pgrc-alert-copy {
+    display: grid;
+    gap: 0.1rem;
+    flex: 1;
 }
 
 /* Card login/registrazione */
@@ -106,4 +345,6 @@
 }
 
 /* Utility: classe .hidden compatibile con Bootstrap */
-.hidden { display: none !important; }
+.hidden {
+    display: none !important;
+}

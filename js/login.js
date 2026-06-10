@@ -49,9 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
 
-    // Paragrafi per messaggi di errore (inizialmente vuoti)
-    const loginError = document.getElementById('login-error');
-    const registerError = document.getElementById('register-error');
+    function showAuthAlert(message, type = 'danger') {
+        if (typeof ui !== 'undefined') {
+            ui.notify({ type, title: type === 'danger' ? 'Accesso non riuscito' : 'Operazione completata', message });
+        }
+    }
 
     // ─── LISTENER: link "Registrati" (nella vista login) ─────────────────────
     // Quando l'utente clicca "Registrati":
@@ -79,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //   2. Legge username e password dai rispettivi <input>
     //   3. Chiama auth.login() che cerca l'utente in localStorage
     //   4. Se successo: redirect a home.html
-    //   5. Se fallimento: mostra il messaggio di errore nel paragrafo #login-error
+    //   5. Se fallimento: mostra il messaggio con l'alert globale ui.notify()
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault(); // FONDAMENTALE: senza questo la pagina si ricaricherebbe
 
@@ -93,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.success) {
             window.location.href = 'home.html'; // Login OK: vai alla home
         } else {
-            loginError.textContent = result.message; // Mostra errore sotto il form
+            showAuthAlert(result.message);
         }
     });
 
@@ -122,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sessionStorage.setItem('pgrc_pendingFirstLoginUser', result.user.username);
             window.location.href = 'first-login.html';
         } else {
-            registerError.textContent = result.message; // Es. "Username già esistente."
+            showAuthAlert(result.message);
         }
     });
 });
