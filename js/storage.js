@@ -3,7 +3,7 @@
  * storage.js — Livello dati: tutte le operazioni su Web Storage
  * =============================================================================
  *
- * Questo modulo è il PRIMO ad essere caricato in ogni pagina (tranne index).
+ * Questo modulo è il PRIMO ad essere caricato in ogni pagina.
  * Astrae completamente le interazioni con localStorage, esponendo funzioni
  * con nomi semantici invece di chiamare direttamente localStorage.getItem/setItem.
  * Tutti gli altri moduli (api.js, auth.js, controller) usano SOLO queste funzioni.

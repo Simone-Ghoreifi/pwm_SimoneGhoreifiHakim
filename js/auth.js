@@ -237,15 +237,13 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', async (event) => {
         event.preventDefault();
 
-        const confirmed = typeof ui !== 'undefined'
-            ? await ui.confirm({
-                title: 'Conferma logout',
-                message: 'Vuoi terminare la sessione corrente?',
-                confirmText: 'Logout',
-                confirmVariant: 'btn-primary',
-                iconClass: 'bi bi-box-arrow-right'
-            })
-            : confirm('Vuoi terminare la sessione corrente?');
+        const confirmed = await ui.confirm({
+            title: 'Conferma logout',
+            message: 'Vuoi terminare la sessione corrente?',
+            confirmText: 'Logout',
+            confirmVariant: 'btn-primary',
+            iconClass: 'bi bi-box-arrow-right'
+        });
 
         if (confirmed) auth.logout();
     });

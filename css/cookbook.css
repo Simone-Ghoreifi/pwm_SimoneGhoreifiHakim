@@ -1,0 +1,28 @@
+.cookbook-card {
+    overflow: hidden;
+}
+
+.cookbook-card-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+}
+
+.cookbook-card-link:hover .cookbook-title {
+    color: var(--pgrc-cream);
+}
+
+.cookbook-thumb {
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+}
+
+.cookbook-title {
+    transition: color 0.18s ease;
+}
+
+.cookbook-note {
+    min-height: 110px;
+    resize: vertical;
+}

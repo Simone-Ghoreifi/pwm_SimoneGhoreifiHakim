@@ -64,6 +64,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Caso limite: se l'URL non contiene ?id=, mostra errore e interrompe
     if (!mealId) {
         recipeCardBody.innerHTML = '<p class="text-danger">ID ricetta non trovato.</p>';
+        ui.notify({
+            type: 'danger',
+            title: 'Ricetta non disponibile',
+            message: 'L’URL non contiene un ID ricetta valido.'
+        });
         return;
     }
 
@@ -150,6 +155,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!meal) {
             recipeCardBody.innerHTML = '<p class="text-danger">Ricetta non trovata.</p>';
+            ui.notify({
+                type: 'danger',
+                title: 'Ricetta non trovata',
+                message: 'Non è stato possibile recuperare i dati della ricetta.'
+            });
             return;
         }
 
@@ -251,12 +261,25 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   - Se idx era ≥ 0 (c'era) → abbiamo appena RIMOSSO → ora non è nel ricettario
      *
      * NOTA: la nota (notes) viene inizializzata a "" quando si aggiunge la ricetta.
-     *   L'utente può poi scrivere la nota dalla pagina profile.html.
+     *   L'utente può poi scrivere la nota dalla pagina cookbook.html.
      */
-    function toggleCookbook() {
+    async function toggleCookbook() {
         const cookbooks = getCookbooks();
         let userCookbook = cookbooks[currentUser.id] || [];
         const idx = userCookbook.findIndex(r => r.mealId === mealId);
+        const isRemoving = idx > -1;
+
+        const confirmed = await ui.confirm({
+            title: isRemoving ? 'Rimuovi dal ricettario' : 'Aggiungi al ricettario',
+            message: isRemoving
+                ? 'Vuoi rimuovere questa ricetta dal tuo ricettario personale?'
+                : 'Vuoi salvare questa ricetta nel tuo ricettario personale?',
+            confirmText: isRemoving ? 'Rimuovi' : 'Aggiungi',
+            confirmVariant: isRemoving ? 'btn-danger' : 'btn-primary',
+            iconClass: isRemoving ? 'bi bi-bookmark-x' : 'bi bi-bookmark-plus'
+        });
+
+        if (!confirmed) return;
 
         if (idx > -1) {
             // Ricetta trovata → rimuovila
@@ -278,6 +301,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             <i class="bi ${nowInCookbook ? 'bi-bookmark-x' : 'bi-bookmark-plus'} me-1"></i>
             ${nowInCookbook ? 'Rimuovi dal Ricettario' : 'Aggiungi al Ricettario'}
         `;
+
+        ui.notify({
+            type: 'success',
+            title: nowInCookbook ? 'Ricetta aggiunta' : 'Ricetta rimossa',
+            message: nowInCookbook
+                ? 'La ricetta è stata salvata nel tuo ricettario.'
+                : 'La ricetta è stata rimossa dal tuo ricettario.'
+        });
     }
 
     // =========================================================================
@@ -408,6 +439,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         reviewForm.reset();  // Svuota tutti i campi del form
         loadReviews();       // Ricarica la lista recensioni (ora include la nuova)
+        ui.notify({
+            type: 'success',
+            title: 'Recensione salvata',
+            message: 'La tua valutazione è stata aggiornata.'
+        });
     });
 
     /**
@@ -429,6 +465,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveReviews(allReviews);
         reviewForm.reset();
         loadReviews(); // Aggiorna la UI (il form sarà vuoto, pulsante rimuovi sparirà)
+        ui.notify({
+            type: 'info',
+            title: 'Recensione rimossa',
+            message: 'La tua recensione non è più visibile su questa ricetta.'
+        });
     });
 
     // ─── AVVIO: carica dettagli ricetta e poi recensioni ─────────────────────

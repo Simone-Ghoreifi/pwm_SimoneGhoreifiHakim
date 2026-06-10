@@ -89,7 +89,7 @@ Il quarto macro-scenario prevede la possibilità di recensire le ricette:
 
 ## 3. Architettura generale
 
-L'applicazione adotta un'architettura **MPA (Multi-Page Application)** con quattro pagine HTML distinte. Non viene usato alcun router client-side: la navigazione avviene tramite normali link HTML e redirect JavaScript (`window.location.href`).
+L'applicazione adotta un'architettura **MPA (Multi-Page Application)** con sei pagine HTML distinte. Non viene usato alcun router client-side: la navigazione avviene tramite normali link HTML e redirect JavaScript (`window.location.href`).
 
 La logica JavaScript è suddivisa in livelli sovrapposti e caricati in sequenza:
 
@@ -117,22 +117,25 @@ Ogni pagina HTML carica i livelli necessari nell'ordine corretto tramite tag `<s
 ├── first-login.html    # Pagina di convalida UI dopo registrazione
 ├── home.html           # Pagina di ricerca ricette
 ├── recipe.html         # Pagina di dettaglio ricetta e recensioni
-├── profile.html        # Area personale e ricettario
+├── cookbook.html       # Ricettario personale e note private
+├── profile.html        # Area personale
 │
 ├── css/
-│   ├── style.css       # Reset, variabili, override Bootstrap (colore primario DarkCyan)
+│   ├── style.css       # Tema dark, palette calda e componenti UI condivisi
+│   ├── cookbook.css    # Stili specifici per card e note del ricettario
 │   ├── home.css        # Stili specifici per le card ricette nella home
 │   ├── recipe.css      # Stili specifici per l'immagine nella scheda ricetta
-│   └── profile.css     # Stile per la textarea delle note nel ricettario
+│   └── profile.css     # Stili specifici per la card profilo
 │
 ├── js/
 │   ├── storage.js      # Livello dati: tutte le operazioni su localStorage
 │   ├── api.js          # Livello API: wrapper degli endpoint TheMealDB
 │   ├── auth.js         # Livello autenticazione: registro, login, logout, checkAuth
-│   ├── ui.js           # Componenti UI condivisi, inclusa la modale di conferma
+│   ├── ui.js           # Componenti UI condivisi: modali e alert globali
 │   ├── login.js        # Controller: gestisce index.html
 │   ├── first-login.js  # Controller: gestisce first-login.html
 │   ├── home.js         # Controller: gestisce home.html
+│   ├── cookbook.js     # Controller: gestisce cookbook.html
 │   ├── recipe.js       # Controller: gestisce recipe.html
 │   └── profile.js      # Controller: gestisce profile.html
 │
@@ -183,13 +186,17 @@ La struttura della pagina comprende due card principali (entrambe contenute nel 
 
 Il pulsante ricettario è implementato come toggle: il testo, il colore e l'icona cambiano dinamicamente in base allo stato corrente (nella/non nella raccolta personale).
 
-### 5.4 `profile.html` — Area Personale
+### 5.4 `cookbook.html` — Ricettario Personale
 
-La pagina è divisa in due sezioni verticali:
+Il ricettario personale è stato separato dall'area personale in una pagina dedicata, accessibile dalla navbar tramite il link "Ricettario". La pagina mostra una griglia di card, una per ogni ricetta salvata dall'utente. Ogni card contiene immagine, nome della ricetta, categoria, area geografica e una textarea per la nota privata.
 
-1. **Card dati utente** (`#profile-details`): visualizza username, email e piatti preferiti. Contiene un form di modifica nascosto, attivabile tramite il pulsante "Modifica Dati". Il cambio password richiede l'inserimento della password attuale. Il pulsante "Rimuovi Profilo" apre una modale Bootstrap di conferma prima di procedere.
+Il nome e l'immagine della ricetta vengono letti prima dalle cache `pgrc_meal_details_cache`/`pgrc_meals_cache`, con API solo come fallback. La card è cliccabile e porta alla vista dettaglio già implementata (`recipe.html?id=...`), mentre il salvataggio della nota aggiorna `pgrc_cookbooks`.
 
-2. **Card ricettario** (`#my-cookbook`): griglia Bootstrap che mostra una card per ogni ricetta nel ricettario. Ogni card include il nome della ricetta linkato alla scheda, una textarea per le note private, e un pulsante "Salva Nota" con feedback visivo inline ("Salvato!" che scompare dopo 2 secondi). Anche qui nome e immagine della ricetta vengono letti prima dalle cache `pgrc_meal_details_cache`/`pgrc_meals_cache`, con API solo come fallback.
+### 5.5 `profile.html` — Area Personale
+
+La pagina profilo è centrata nel viewport e presenta una singola card con tutti i dati utente già visibili in campi form disabilitati: username, email, piatti preferiti e password. Il pulsante "Modifica Dati" abilita username, email e preferiti; il campo password rimane bloccato e può essere sbloccato solo tramite una modale che richiede la password attuale.
+
+La conferma della password attuale abilita il campo nuova password. Il salvataggio aggiorna `pgrc_users` e, se cambia lo username, aggiorna anche lo username copiato nelle recensioni dell'utente. Il pulsante "Rimuovi Profilo" usa la modale Bootstrap condivisa prima di eliminare account, ricettario e recensioni associate.
 
 ---
 
@@ -344,7 +351,7 @@ Quando l'utente attiva un filtro a tendina, l'input testuale viene svuotato e vi
 
 Al caricamento di `recipe.html`, l'ID viene letto dai parametri URL tramite `URLSearchParams`. Il controller prova prima a leggere il dettaglio da `pgrc_meal_details_cache`; se non lo trova, cerca la ricetta nel catalogo completo `pgrc_meals_cache`; se anche questo fallisce, chiama `api.lookupById()` e salva il risultato in localStorage. Il contenuto della card viene poi generato dinamicamente via `innerHTML`.
 
-Il pulsante di aggiunta/rimozione dal ricettario accede all'oggetto `pgrc_cookbooks` in localStorage, trova il ricettario dell'utente corrente tramite il suo ID, e aggiunge o rimuove la ricetta (identificata da `mealId`). L'aggiornamento del pulsante è immediato: classe CSS, icona Bootstrap Icons e testo cambiano senza ricaricare la pagina.
+Il pulsante di aggiunta/rimozione dal ricettario accede all'oggetto `pgrc_cookbooks` in localStorage, trova il ricettario dell'utente corrente tramite il suo ID, e aggiunge o rimuove la ricetta (identificata da `mealId`). Prima di modificare il ricettario viene mostrata una modale conferma/annulla. Dopo la conferma, classe CSS, icona Bootstrap Icons e testo del pulsante cambiano senza ricaricare la pagina.
 
 ### 8.4 Recensioni
 
@@ -356,7 +363,7 @@ Le stelle nelle recensioni mostrate sono generate tramite Bootstrap Icons (`bi-s
 
 ### 8.5 Gestione profilo e piatti preferiti
 
-Il campo `favoriteDishes` è una stringa a testo libero separata da virgole, raccolta alla registrazione e modificabile nell'area personale. La scelta del formato stringa libera (anziché un array strutturato o una multi-select) è motivata dalla semplicità: non è necessaria nessuna elaborazione sui dati, e la leggibilità per l'utente è immediata.
+Il campo `favoriteDishes` è una stringa a testo libero separata da virgole, raccolta alla registrazione e modificabile nell'area personale. La scelta del formato stringa libera (anziché un array strutturato o una multi-select) è motivata dalla semplicità: non è necessaria nessuna elaborazione sui dati, e la leggibilità per l'utente è immediata. L'area personale mostra i campi sempre visibili ma disabilitati, abilita la modifica esplicita tramite pulsante e richiede una seconda verifica per cambiare la password.
 
 L'eliminazione del profilo esegue in sequenza:
 1. Rimozione dell'utente dall'array `pgrc_users`.
@@ -373,7 +380,7 @@ L'eliminazione del profilo esegue in sequenza:
 L'applicazione utilizza Bootstrap 5.3 caricato via CDN per tutte le pagine. Bootstrap fornisce:
 
 - **Sistema di griglia responsivo** (`container`, `row`, `col-*`, `row-cols-*`) per adattare il layout a schermi di diverse dimensioni.
-- **Navbar responsiva** con menu collassabile (hamburger) su schermi piccoli, identica in tutte le pagine protette.
+- **Navbar responsiva e fixed** con menu collassabile (hamburger) su schermi piccoli, identica in tutte le pagine protette.
 - **Card** per contenitori visivi di ricette, recensioni, dettaglio ricetta, sezioni profilo.
 - **Componenti form** (`form-control`, `form-select`, `form-label`, `input-group`) per uniformità visiva di tutti i form.
 - **Bottoni** (`btn`, `btn-primary`, `btn-danger`, `btn-sm`) con stati hover e active.
@@ -382,21 +389,23 @@ L'applicazione utilizza Bootstrap 5.3 caricato via CDN per tutte le pagine. Boot
 
 ### 9.2 Personalizzazione del tema colore
 
-Il colore primario di Bootstrap è stato sostituito con **DarkCyan (#008B8B)** tramite override delle variabili CSS che Bootstrap 5 espone a livello di componente. In `style.css`, le classi `.btn-primary`, `.bg-primary`, `.badge.bg-primary` e `.text-primary` vengono ridefinite usando le custom properties di Bootstrap (`--bs-btn-bg`, `--bs-btn-hover-bg`, ecc.), senza necessità di ricompilare il sorgente SASS del framework.
+L'interfaccia usa dark mode di default con una palette calda ispirata al contesto culinario: sfondi scuri, accento rosso caldo e colore crema per testi secondari, link e stati hover. In `style.css`, le variabili Bootstrap e le classi principali (`.btn-primary`, `.bg-primary`, `.badge`, `.form-control`, `.card`, `.modal-content`) vengono ridefinite senza ricompilare il sorgente SASS del framework.
 
 ### 9.3 CSS specifici per pagina
 
 Oltre a `style.css`, ogni pagina ha un file CSS dedicato per gli aspetti non coperti da Bootstrap:
 
 - **`home.css`**: definisce l'effetto hover delle card ricette (traslazione verso l'alto e ombra amplificata) e l'altezza fissa delle immagini.
+- **`cookbook.css`**: definisce card, immagini e textarea della pagina ricettario.
 - **`recipe.css`**: imposta una media query per mantenere un aspect ratio coerente dell'immagine della ricetta su schermi desktop.
-- **`profile.css`**: definisce l'altezza minima e la modalità di ridimensionamento della textarea delle note nel ricettario.
+- **`profile.css`**: definisce il dimensionamento della card profilo e del pulsante di sblocco password.
 
 ### 9.4 Bootstrap Icons 1.11
 
 Le icone vettoriali sono fornite da Bootstrap Icons, caricate via CDN. Vengono usate per:
 - icone nella navbar (casa, persona, porta di uscita, libro);
 - icone nei pulsanti (freccia di accesso, persona+, segnalibro, cestino, matita, floppy disk, invio);
+- icone negli alert globali e nelle modali condivise;
 - **stelle di valutazione** nelle recensioni (`bi-star-fill` / `bi-star` con `text-warning`), che sostituiscono i precedenti caratteri Unicode ★/☆.
 
 ---
@@ -405,7 +414,7 @@ Le icone vettoriali sono fornite da Bootstrap Icons, caricate via CDN. Vengono u
 
 ### Architettura MPA vs SPA
 
-È stata preferita una architettura Multi-Page Application (MPA) con quattro file HTML distinti rispetto a una Single-Page Application (SPA). Questa scelta è motivata da:
+È stata preferita una architettura Multi-Page Application (MPA) con file HTML distinti rispetto a una Single-Page Application (SPA). Questa scelta è motivata da:
 
 - **Semplicità**: non richiede un router client-side, gestione di stati complessi o build tools.
 - **Aderenza alla specifica**: il documento di progetto parla di "pagine web" al plurale e non richiede esplicitamente un'architettura SPA.
