@@ -1,9 +1,23 @@
 /**
- * profile.js — Controller area personale.
+ * =============================================================================
+ * profile.js — Controller area personale
+ * =============================================================================
  *
- * La pagina mostra subito tutti i campi utente in modalità disabled. Il pulsante
- * "Modifica Dati" sblocca username, email e preferiti; la password richiede una
- * verifica separata tramite modale prima di diventare editabile.
+ * La pagina mostra subito tutti i dati dell'utente corrente, ma in modalità
+ * disabled. L'utente può:
+ *   1. premere "Modifica Dati" per sbloccare username, email e preferiti;
+ *   2. sbloccare la password solo dopo conferma della password attuale;
+ *   3. salvare le modifiche in pgrc_users;
+ *   4. cancellare il profilo, ripulendo anche ricettario e recensioni.
+ *
+ * PUNTI DA SAPER SPIEGARE:
+ *   - Lo username è duplicato dentro ogni recensione per semplificare il render.
+ *     Per questo, se cambia username, aggiorniamo anche pgrc_reviews.
+ *   - La cancellazione profilo deve toccare tre aree dati: utenti, ricettario e
+ *     recensioni. Alla fine viene chiamato auth.logout() per pulire la sessione.
+ *   - Il campo password non viene mai precompilato: il placeholder mascherato è
+ *     solo UI, non contiene la password reale.
+ * =============================================================================
  */
 document.addEventListener('DOMContentLoaded', () => {
     auth.checkAuth();
@@ -23,11 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteProfileBtn = document.getElementById('delete-profile-btn');
     const editableFields = [usernameInput, emailInput, favoritesInput];
 
+    // Bootstrap non inizializza i tooltip da solo: serve istanziare i trigger.
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(element => {
         bootstrap.Tooltip.getOrCreateInstance(element);
     });
 
     function fillForm() {
+        // Sincronizza il form con currentUser; utile sia all'avvio sia dopo annulla/salva.
         usernameInput.value = currentUser.username;
         emailInput.value = currentUser.email;
         favoritesInput.value = currentUser.favoriteDishes || '';
@@ -36,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setEditMode(enabled) {
+        // La password resta bloccata anche in edit mode: ha un flusso di verifica separato.
         editableFields.forEach(field => { field.disabled = !enabled; });
         passwordInput.disabled = true;
         passwordInput.value = '';
@@ -45,11 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function refreshCurrentUser() {
+        // Rilegge l'utente dal Web Storage, così il form mostra sempre lo stato persistito.
         currentUser = auth.getCurrentUser();
         fillForm();
     }
 
     function validateUsername(users, username) {
+        // Case-insensitive: "Mario" e "mario" vengono considerati lo stesso username.
         const normalized = username.trim().toLowerCase();
         return !users.some(user => (
             user.id !== currentUser.id && user.username.toLowerCase() === normalized
@@ -57,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function validateEmail(users, email) {
+        // Anche l'email viene confrontata in modo case-insensitive.
         const normalized = email.trim().toLowerCase();
         return !users.some(user => (
             user.id !== currentUser.id && user.email.toLowerCase() === normalized
@@ -64,11 +84,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     editProfileBtn.addEventListener('click', () => {
+        // Entra in modalità modifica senza cambiare ancora il localStorage.
         setEditMode(true);
         usernameInput.focus();
     });
 
     cancelEditBtn.addEventListener('click', () => {
+        // Ripristina i valori persistiti, scartando quello che l'utente aveva scritto.
         refreshCurrentUser();
         setEditMode(false);
         ui.notify({
@@ -96,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (password === null) return;
 
+        // La verifica usa l'utente salvato, non i campi form eventualmente modificati.
         const users = getUsers();
         const user = users.find(candidate => candidate.id === currentUser.id);
         const isValid = await auth.verifyPassword(user, password);
@@ -162,6 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
         users[userIndex].email = newEmail;
         users[userIndex].favoriteDishes = newFavorites;
 
+        // Denormalizzazione controllata: le review salvano anche username per non
+        // fare join con pgrc_users durante il render della pagina ricetta.
         const allReviews = getReviews();
         for (const mealId in allReviews) {
             allReviews[mealId].forEach(review => {
@@ -170,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!passwordInput.disabled && newPassword) {
+            // Se il campo password è stato sbloccato ma lasciato vuoto, non cambiamo password.
             const credential = await auth.createPasswordCredential(newPassword);
             Object.assign(users[userIndex], credential);
             delete users[userIndex].password;
@@ -197,12 +223,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!confirmed) return;
 
+        // 1) rimuove l'account da pgrc_users.
         saveUsers(getUsers().filter(user => user.id !== currentUser.id));
 
+        // 2) rimuove l'intero ricettario personale dell'utente.
         const cookbooks = getCookbooks();
         delete cookbooks[currentUser.id];
         saveCookbooks(cookbooks);
 
+        // 3) rimuove solo le recensioni scritte dall'utente eliminato.
         const allReviews = getReviews();
         for (const mealId in allReviews) {
             allReviews[mealId] = allReviews[mealId].filter(review => review.userId !== currentUser.id);

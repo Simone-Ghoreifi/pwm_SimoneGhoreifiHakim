@@ -339,12 +339,12 @@ La ricerca è implementata con modalità mutuamente esclusive, gestite dalla fun
 
 1. **Filtro categoria attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByCategory()`.
 2. **Filtro area attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByArea()`.
-3. **Filtro lettera iniziale attivo**: filtro su `pgrc_meals_cache`, con fallback `api.filterByStartLetter()`.
+3. **Testo inserito, tipo "iniziale"**: filtro su `pgrc_meals_cache`, con fallback `api.filterByStartLetter()`.
 4. **Testo inserito, tipo "nome"**: filtro locale sul nome, con fallback `api.searchByName()`.
 5. **Testo inserito, tipo "ingrediente"**: filtro locale sui campi `strIngredient1...20`, con fallback `api.searchByIngredient()`.
 6. **Nessun filtro attivo**: caricamento completo del catalogo tramite `loadAllMeals()` (con cache).
 
-Quando l'utente attiva un filtro a tendina, l'input testuale viene svuotato e viceversa, per garantire la mutua esclusività. La ricerca testuale utilizza un meccanismo di **debounce** (ritardo di 500ms) implementato con `setTimeout`/`clearTimeout`, per evitare di inviare una chiamata API a ogni singola lettera digitata.
+Quando l'utente attiva un filtro a tendina, l'input testuale viene svuotato e viceversa, per garantire la mutua esclusività. La ricerca testuale, inclusa la modalità per iniziale, utilizza un meccanismo di **debounce** (ritardo di 500ms) implementato con `setTimeout`/`clearTimeout`, per evitare di inviare una chiamata API a ogni singola lettera digitata.
 
 ### 8.3 Scheda Ricetta e Ricettario
 
@@ -368,7 +368,7 @@ L'eliminazione del profilo esegue in sequenza:
 1. Rimozione dell'utente dall'array `pgrc_users`.
 2. Eliminazione della chiave corrispondente in `pgrc_cookbooks`.
 3. Rimozione di tutte le recensioni con `userId` corrispondente da `pgrc_reviews`.
-4. Chiamata a `auth.logout()` che svuota la sessionStorage e reindirizza alla home.
+4. Chiamata a `auth.logout()` che svuota la sessionStorage e reindirizza alla pagina di login.
 
 ---
 
@@ -395,7 +395,7 @@ L'interfaccia usa dark mode di default con una palette calda ispirata al contest
 Oltre a `style.css`, ogni pagina ha un file CSS dedicato per gli aspetti non coperti da Bootstrap:
 
 - **`home.css`**: definisce l'effetto hover delle card ricette (traslazione verso l'alto e ombra amplificata) e l'altezza fissa delle immagini.
-- **`cookbook.css`**: definisce card, immagini e textarea della pagina ricettario.
+- **`cookbook.css`**: definisce card, immagini e riga di azioni della pagina ricettario.
 - **`recipe.css`**: imposta una media query per mantenere un aspect ratio coerente dell'immagine della ricetta su schermi desktop.
 - **`profile.css`**: definisce il dimensionamento della card profilo e del pulsante di sblocco password.
 
@@ -434,6 +434,10 @@ Il catalogo completo TheMealDB richiede 26 chiamate API in parallelo. Effettuarl
 ### Delegazione degli eventi nel ricettario
 
 Le card del ricettario sono generate dinamicamente da JavaScript (una per ogni ricetta salvata). Anziché aggiungere un event listener a ogni bottone durante la creazione, viene usata la **event delegation**: un singolo listener sul container padre (`#cookbook-container`) intercetta i click e identifica il target tramite `e.target.closest(...)`. Questo approccio è più efficiente in memoria e funziona correttamente anche con elementi aggiunti dinamicamente.
+
+### Scelta sul testo libero nel ricettario
+
+La specifica cita un campo testuale personale come possibilità collegata al ricettario, ma le operazioni base richieste in discussione si concentrano su registrazione/login, ricerca, scheda ricetta, popolamento ricettario e inserimento/rimozione recensioni. In questa versione quel campo non è stato mantenuto perché introduceva una seconda area testuale sovrapposta al sistema di recensioni. Il ricettario conserva quindi solo l'elenco delle ricette salvate (`mealId`), mentre la valutazione personale passa dalle recensioni, che sono strutturate e modificabili.
 
 ### Debounce sulla ricerca testuale
 

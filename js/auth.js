@@ -1,10 +1,30 @@
 /**
- * auth.js — Registrazione, login, logout e sessione.
+ * =============================================================================
+ * auth.js — Registrazione, login, logout e sessione
+ * =============================================================================
  *
- * Le password non vengono mai salvate in chiaro: ogni utente contiene
- * `passwordSalt`, `passwordHash` e `passwordAlgorithm`. In un'app reale l'hash
- * andrebbe calcolato lato server, ma per questo progetto client-side è comunque
- * preferibile mostrare nel localStorage un digest non reversibile.
+ * Questo modulo contiene tutta la logica di autenticazione simulata lato client.
+ * Non esiste un back-end: gli utenti vengono letti e scritti tramite storage.js,
+ * mentre la sessione corrente vive in sessionStorage.
+ *
+ * COSA MOSTRARE AL DOCENTE:
+ *   - Dopo registrazione: localStorage.pgrc_users contiene l'utente, ma
+ *     sessionStorage.pgrc_loggedInUser NON esiste ancora.
+ *   - Dopo login: sessionStorage.pgrc_loggedInUser contiene l'ID dell'utente.
+ *   - Dopo logout o cancellazione profilo: pgrc_loggedInUser viene rimosso.
+ *
+ * PASSWORD:
+ *   Le password non vengono mai salvate in chiaro: ogni utente contiene
+ *   `passwordSalt`, `passwordHash` e `passwordAlgorithm`. In un'app reale l'hash
+ *   andrebbe calcolato lato server con algoritmi dedicati, ma per questo progetto
+ *   client-side è comunque preferibile mostrare nel localStorage un digest non
+ *   reversibile invece della password originale.
+ *
+ * COMPATIBILITÀ:
+ *   Se nel browser esistono vecchi utenti con campo `password`, il modulo li
+ *   migra automaticamente a salt+hash appena possibile. Questo evita dati legacy
+ *   imbarazzanti durante una demo in DevTools.
+ * =============================================================================
  */
 
 // Chiave sessionStorage usata dai controller per capire se l'utente è loggato.
@@ -44,6 +64,7 @@ function createPasswordSalt() {
 }
 
 function fallbackHash(value) {
+    // FNV-1A semplificato: fallback didattico solo se Web Crypto non è disponibile.
     let hashA = 0x811c9dc5;
     let hashB = 0x9e3779b9;
 
@@ -80,6 +101,8 @@ async function hashPassword(password, salt, algorithm = PASSWORD_ALGORITHM) {
 }
 
 async function createPasswordCredential(password) {
+    // Ogni password ha un salt diverso: due utenti con la stessa password
+    // avranno comunque hash diversi nel localStorage.
     const passwordSalt = createPasswordSalt();
     const digest = await hashPassword(password, passwordSalt);
 
@@ -188,6 +211,8 @@ const auth = {
     },
 
     logout: () => {
+        // La persistenza dell'account resta in localStorage; qui termina solo
+        // la sessione corrente del browser.
         sessionStorage.removeItem(LOGGED_IN_USER_KEY);
         window.location.href = 'index.html';
     },
@@ -199,6 +224,7 @@ const auth = {
     },
 
     checkAuth: () => {
+        // Guardia usata da tutte le pagine private: senza sessione si torna al login.
         if (!auth.getCurrentUser()) window.location.href = 'index.html';
     },
 
@@ -227,6 +253,7 @@ const auth = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Migrazione opportunistica: non blocca il caricamento della pagina.
     auth.migrateLegacyPasswords().catch(error => {
         console.error('Migrazione password legacy fallita:', error);
     });

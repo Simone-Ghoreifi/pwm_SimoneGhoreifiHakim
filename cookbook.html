@@ -11,6 +11,12 @@
 </head>
 <body class="app-shell d-flex flex-column min-vh-100">
 
+    <!--
+        Pagina privata del ricettario personale.
+        cookbook.js legge pgrc_cookbooks, carica i dettagli ricetta da cache/API e
+        genera card con due azioni: rimozione confermata e recensione/edit recensione.
+    -->
+
     <nav class="navbar navbar-expand-md navbar-dark bg-primary fixed-top">
         <div class="container-fluid px-3">
             <a class="navbar-brand navbar-brand-home fw-bold" href="home.html"
@@ -55,6 +61,7 @@
         </div>
 
         <p id="cookbook-message" class="text-muted fs-5 my-3"></p>
+        <!-- Container gestito via JS: le card non sono statiche perché dipendono dall'utente loggato. -->
         <div id="cookbook-container"
              class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
         </div>
@@ -64,6 +71,7 @@
         <p class="mb-0">&copy; 2026 Progetto Universitario PWM</p>
     </footer>
 
+    <!-- Ordine script: api/storage/ui/auth sono dipendenze dirette di cookbook.js. -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/api.js"></script>
     <script src="js/storage.js"></script>
