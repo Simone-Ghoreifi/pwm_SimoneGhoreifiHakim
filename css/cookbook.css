@@ -22,7 +22,13 @@
     transition: color 0.18s ease;
 }
 
-.cookbook-note {
-    min-height: 110px;
-    resize: vertical;
+.cookbook-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.cookbook-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
 }

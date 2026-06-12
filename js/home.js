@@ -5,7 +5,7 @@
  *
  * Gestisce tutta la logica interattiva della pagina di ricerca:
  *   - Popolamento dinamico dei filtri (categorie e aree) con cache localStorage
- *   - Ricerca per nome, ingrediente, categoria, area e iniziale
+ *   - Ricerca per nome, ingrediente, iniziale, categoria e area
  *   - Caricamento dell'intero catalogo in localStorage allo startup della home
  *   - Rendering dei risultati come Bootstrap Cards
  *
@@ -15,11 +15,10 @@
  *   - auth.js     (auth.checkAuth per proteggere la pagina)
  *
  * ELEMENTI DOM GESTITI:
- *   #search-type      → <select> "Per Nome" / "Per Ingrediente"
+ *   #search-type      → <select> "Per Nome" / "Per Ingrediente" / "Per Iniziale"
  *   #search-input     → <input text> campo di testo libero
  *   #category-filter  → <select> filtro categoria (popolato dinamicamente)
  *   #area-filter      → <select> filtro area geografica (popolato dinamicamente)
- *   #letter-filter    → <select> filtro lettera iniziale A-Z
  *   #results-container→ <div> griglia Bootstrap dove vengono iniettate le card
  *   #search-message   → <p> per messaggi di stato ("Caricamento...", "Nessun risultato")
  *
@@ -33,8 +32,8 @@
  *   2. AREA selezionata → api.filterByArea()
  *      (svuota testo e categoria)
  *
- *   3. LETTERA selezionata → api.filterByStartLetter()
- *      (svuota testo, categoria e area)
+ *   3. TESTO + tipo "iniziale" → api.filterByStartLetter()
+ *      (con debounce 500ms)
  *
  *   4. TESTO + tipo "nome" → api.searchByName()
  *      (con debounce 500ms)
@@ -59,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchType = document.getElementById('search-type');       // select "Per Nome/Ingrediente"
     const categoryFilter = document.getElementById('category-filter');
     const areaFilter = document.getElementById('area-filter');
-    const letterFilter = document.getElementById('letter-filter');
     const resultsContainer = document.getElementById('results-container'); // la griglia Bootstrap row
     const searchMessage = document.getElementById('search-message');
 
@@ -69,9 +67,27 @@ document.addEventListener('DOMContentLoaded', () => {
     let debounceTimer;
 
     function setSearchControlsDisabled(disabled) {
-        [searchInput, searchType, categoryFilter, areaFilter, letterFilter].forEach(control => {
+        [searchInput, searchType, categoryFilter, areaFilter].forEach(control => {
             control.disabled = disabled;
         });
+    }
+
+    function updateSearchInputMode() {
+        if (searchType.value === 'ingredient') {
+            searchInput.placeholder = 'es. chicken, tomato, cheese...';
+            searchInput.removeAttribute('maxlength');
+            return;
+        }
+
+        if (searchType.value === 'letter') {
+            searchInput.placeholder = 'es. A';
+            searchInput.maxLength = 1;
+            searchInput.value = searchInput.value.trim().slice(0, 1);
+            return;
+        }
+
+        searchInput.placeholder = 'es. Pasta, Curry...';
+        searchInput.removeAttribute('maxlength');
     }
 
     function resetSelectOptions(selectElement) {
@@ -282,8 +298,8 @@ document.addEventListener('DOMContentLoaded', () => {
      *
      *   if (categoria selezionata)       → filtra pgrc_meals_cache o fallback API
      *   else if (area selezionata)       → filtra pgrc_meals_cache o fallback API
-     *   else if (lettera selezionata)    → filtra pgrc_meals_cache o fallback API
      *   else if (testo inserito)
+     *     if (tipo = iniziale)           → filtra iniziale cache o fallback API
      *     if (tipo = ingrediente)        → filtra ingredienti cache o fallback API
      *     else (tipo = nome, default)    → filtra nomi cache o fallback API
      *   else (nessun filtro)             → loadAllMeals (con cache)
@@ -295,8 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchTerm = searchInput.value.trim(); // .trim() rimuove spazi iniziali/finali
         const category = categoryFilter.value;       // "" se "Tutte le Categorie"
         const area = areaFilter.value;               // "" se "Tutte le Aree"
-        const startLetter = letterFilter.value;       // "" se "Tutte"
-        const type = searchType.value;               // "name" o "ingredient"
+        const type = searchType.value;               // "name", "ingredient" o "letter"
 
         // Reset UI
         resultsContainer.innerHTML = '';
@@ -319,18 +334,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 meals = data ? data.meals : null;
             }
 
-        } else if (startLetter) {
-            meals = getCachedMealsByPredicate(meal => (
-                meal.strMeal && meal.strMeal.toLowerCase().startsWith(startLetter)
-            ));
-            if (!meals) {
-                const data = await api.filterByStartLetter(startLetter);
-                meals = data ? data.meals : null;
-            }
-
         } else if (searchTerm) {
             // Testo inserito: comportamento dipende dal tipo selezionato
-            if (type === 'ingredient') {
+            if (type === 'letter') {
+                const startLetter = searchTerm.charAt(0).toLowerCase();
+                if (!/^[a-z]$/.test(startLetter)) {
+                    searchMessage.textContent = 'Inserisci una lettera dalla A alla Z.';
+                    return;
+                }
+
+                meals = getCachedMealsByPredicate(meal => (
+                    meal.strMeal && meal.strMeal.toLowerCase().startsWith(startLetter)
+                ));
+                if (!meals) {
+                    const data = await api.filterByStartLetter(startLetter);
+                    meals = data ? data.meals : null;
+                }
+            } else if (type === 'ingredient') {
                 meals = getCachedMealsByPredicate(meal => mealHasIngredient(meal, searchTerm));
                 if (!meals) {
                     const data = await api.searchByIngredient(searchTerm);
@@ -359,15 +379,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================================
 
     /**
-     * LISTENER: cambio del tipo di ricerca (Per Nome / Per Ingrediente)
+     * LISTENER: cambio del tipo di ricerca (Per Nome / Per Ingrediente / Per Iniziale)
      *
      * Aggiorna il placeholder dell'input per guidare l'utente, e rilancia
      * la ricerca se c'è già del testo inserito nel campo.
      */
     searchType.addEventListener('change', () => {
-        searchInput.placeholder = searchType.value === 'ingredient'
-            ? 'es. chicken, tomato, cheese…'
-            : 'es. Pasta, Curry…';
+        updateSearchInputMode();
         if (searchInput.value.trim()) performSearch(); // Rilancia se c'è testo
     });
 
@@ -385,9 +403,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * per garantire la mutua esclusività delle modalità di ricerca.
      */
     searchInput.addEventListener('input', () => {
+        if (searchType.value === 'letter') {
+            searchInput.value = searchInput.value.trim().slice(0, 1);
+        }
         categoryFilter.value = '';  // Deseleziona categoria
         areaFilter.value = '';      // Deseleziona area
-        letterFilter.value = '';    // Deseleziona lettera iniziale
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(performSearch, 500); // 500ms di debounce
     });
@@ -401,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
     categoryFilter.addEventListener('change', () => {
         searchInput.value = ''; // Svuota il campo testo
         areaFilter.value = '';  // Deseleziona area
-        letterFilter.value = ''; // Deseleziona lettera iniziale
         performSearch();        // Ricerca immediata
     });
 
@@ -412,24 +431,13 @@ document.addEventListener('DOMContentLoaded', () => {
     areaFilter.addEventListener('change', () => {
         searchInput.value = '';    // Svuota il campo testo
         categoryFilter.value = ''; // Deseleziona categoria
-        letterFilter.value = '';   // Deseleziona lettera iniziale
         performSearch();           // Ricerca immediata
-    });
-
-    /**
-     * LISTENER: cambio del filtro per lettera iniziale.
-     * Svuota gli altri criteri e interroga l'endpoint search.php?f={letter}.
-     */
-    letterFilter.addEventListener('change', () => {
-        searchInput.value = '';
-        categoryFilter.value = '';
-        areaFilter.value = '';
-        performSearch();
     });
 
     async function initializeRecipeData() {
         setSearchControlsDisabled(true);
         try {
+            updateSearchInputMode();
             await Promise.all([
                 populateFilters(),
                 performSearch()

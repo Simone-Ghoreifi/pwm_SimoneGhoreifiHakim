@@ -19,12 +19,12 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 ├── first-login.html    # Convalida UI dopo registrazione
 ├── home.html           # Ricerca ricette
 ├── recipe.html         # Dettaglio ricetta + recensioni
-├── cookbook.html       # Ricettario personale + note private
+├── cookbook.html       # Ricettario personale + recensioni
 ├── profile.html        # Area personale
 │
 ├── css/
 │   ├── style.css       # Tema dark caldo + override Bootstrap + UI condivisa
-│   ├── cookbook.css    # Card e textarea del ricettario
+│   ├── cookbook.css    # Card e azioni del ricettario
 │   ├── home.css        # Hover card ricette
 │   ├── recipe.css      # Immagine ricetta responsive
 │   └── profile.css     # Layout card profilo
@@ -72,8 +72,8 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 - Redirect automatico a `home.html` se sessione già attiva
 
 ### `home.html` — Ricerca Ricette
-- Ricerca testuale con selettore **Per Nome** / **Per Ingrediente**
-- Filtri a tendina per **Categoria**, **Area geografica** e **Lettera iniziale**
+- Ricerca testuale con selettore **Per Nome** / **Per Ingrediente** / **Per Iniziale**
+- Filtri a tendina per **Categoria** e **Area geografica**
 - Startup della home con cache localStorage di catalogo A–Z, categorie e aree (TTL 1h)
 - Ricerche e filtri serviti prima dal catalogo in localStorage, poi dalle API come fallback
 - Griglia responsive Bootstrap di card cliccabili
@@ -89,7 +89,8 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 ### `cookbook.html` — Ricettario Personale
 - Pagina dedicata al ricettario, separata dall'area personale
 - Card cliccabili verso `recipe.html?id=...`
-- Note private salvate in `pgrc_cookbooks`
+- Rimozione ricette con modale di conferma
+- Inserimento e modifica recensioni direttamente dal ricettario
 - Card popolate da cache dettagli/catalogo, con API solo come fallback
 
 ### `profile.html` — Area Personale
@@ -162,7 +163,7 @@ python3 -m http.server 8080
 | Chiave | Contenuto |
 |---|---|
 | `pgrc_users` | Array di oggetti utente con `passwordSalt`, `passwordHash`, `passwordAlgorithm` |
-| `pgrc_cookbooks` | Oggetto `{ userId: [{ mealId, notes }] }` |
+| `pgrc_cookbooks` | Oggetto `{ userId: [{ mealId }] }` |
 | `pgrc_reviews` | Oggetto `{ mealId: [{ userId, username, preparationDate, date, difficulty, taste }] }` |
 | `pgrc_meals_cache` | Oggetto `{ timestamp, meals[] }` — TTL 1h |
 | `pgrc_categories_cache` | Oggetto `{ timestamp, categories[] }` — TTL 1h |
