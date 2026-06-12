@@ -27,7 +27,7 @@
  *     localStorage → pgrc_meal_details_cache → contiene il dettaglio della ricetta aperta
  *
  *   DOPO aver aggiunto la ricetta:
- *     localStorage → pgrc_cookbooks → il tuo userId → [{"mealId":"52772","notes":""}]
+ *     localStorage → pgrc_cookbooks → il tuo userId → [{"mealId":"52772"}]
  *
  *   DOPO aver inviato una recensione:
  *     localStorage → pgrc_reviews → {"52772": [{"userId":"user_XXX","username":"...","preparationDate":"2025-03-15","date":"2025-...","difficulty":3,"taste":5}]}
@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   1. Legge il ricettario attuale da localStorage
      *   2. Cerca l'indice della ricetta corrente nell'array (findIndex)
      *   3. Se trovata (idx > -1): la rimuove con splice (modifica l'array in-place)
-     *   4. Se non trovata (idx = -1): la aggiunge con push (oggetto {mealId, notes:""})
+     *   4. Se non trovata (idx = -1): la aggiunge con push (oggetto {mealId})
      *   5. Salva il ricettario aggiornato in localStorage
      *   6. Aggiorna l'aspetto del pulsante SENZA ricaricare la pagina
      *
@@ -260,8 +260,6 @@ document.addEventListener('DOMContentLoaded', async () => {
      *   - Se idx era -1 (non c'era) → abbiamo appena AGGIUNTO → ora è nel ricettario
      *   - Se idx era ≥ 0 (c'era) → abbiamo appena RIMOSSO → ora non è nel ricettario
      *
-     * NOTA: la nota (notes) viene inizializzata a "" quando si aggiunge la ricetta.
-     *   L'utente può poi scrivere la nota dalla pagina cookbook.html.
      */
     async function toggleCookbook() {
         const cookbooks = getCookbooks();
@@ -287,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             userCookbook.splice(idx, 1);
         } else {
             // Ricetta non trovata → aggiungila
-            userCookbook.push({ mealId, notes: '' });
+            userCookbook.push({ mealId });
         }
 
         cookbooks[currentUser.id] = userCookbook;

@@ -5,3 +5,14 @@
 #unlock-password-btn {
     min-width: 3rem;
 }
+
+#unlock-password-btn:hover,
+#unlock-password-btn:focus-visible {
+    color: #ffffff;
+    background-color: var(--pgrc-accent);
+    border-color: var(--pgrc-accent);
+}
+
+.tooltip-inner {
+    color: #ffffff;
+}

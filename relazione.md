@@ -32,7 +32,7 @@ Il presente documento descrive la progettazione e l'implementazione dell'applica
 L'obiettivo del progetto è realizzare una web application interattiva, completamente client-side, che consenta a utenti registrati di:
 
 - cercare ricette culinarie attingendo da una sorgente dati esterna (TheMealDB);
-- gestire un ricettario personale con note private associate a ogni ricetta;
+- gestire un ricettario personale con rimozione delle ricette salvate e accesso alle recensioni;
 - recensire le ricette esprimendo una valutazione su difficoltà e gusto, accompagnata dalla data in cui il piatto è stato preparato;
 - gestire il proprio profilo utente (registrazione, modifica dati, cancellazione account).
 
@@ -61,7 +61,7 @@ Il secondo macro-scenario richiede la possibilità di cercare ricette tramite di
 - **Ricerca per ingrediente**: ricerca filtrando per ingrediente principale, tramite endpoint dedicato dell'API.
 - **Filtro per categoria**: selezione da menù a tendina popolato dinamicamente dalle categorie disponibili in TheMealDB.
 - **Filtro per area geografica**: selezione da menù a tendina popolato dinamicamente con le aree geografiche disponibili.
-- **Filtro per lettera iniziale**: selezione A-Z tramite endpoint `search.php?f=`.
+- **Ricerca per lettera iniziale**: modalità del selettore di ricerca che usa l'endpoint `search.php?f=`.
 - **Visualizzazione di tutte le ricette**: in assenza di criteri attivi, l'applicazione mostra l'intero catalogo, scaricato in parallelo iterando sull'alfabeto e memorizzato in cache.
 
 Per ogni ricetta nella scheda dettagliata vengono mostrati: immagine, categoria, area di origine, lista degli ingredienti con relative misure, procedimento di preparazione, e recensioni degli utenti.
@@ -71,8 +71,7 @@ Per ogni ricetta nella scheda dettagliata vengono mostrati: immagine, categoria,
 Il terzo macro-scenario richiede la creazione e gestione di un ricettario personale:
 
 - L'utente può aggiungere o rimuovere una ricetta dal proprio ricettario direttamente dalla scheda dettagliata, tramite un pulsante toggle.
-- Per ogni ricetta nel ricettario è possibile inserire una **nota testuale privata**, non visibile agli altri utenti, salvata in `localStorage`.
-- Il ricettario è visualizzabile nell'area personale, dove ogni card mostra il nome della ricetta (con link alla scheda), la textarea della nota e il pulsante di salvataggio.
+- Il ricettario è visualizzabile in una pagina dedicata, dove ogni card mostra il nome della ricetta, i dati principali, il pulsante di rimozione con conferma e il pulsante per scrivere o modificare la propria recensione.
 
 ### 2.4 Recensioni delle ricette
 
@@ -117,12 +116,12 @@ Ogni pagina HTML carica i livelli necessari nell'ordine corretto tramite tag `<s
 ├── first-login.html    # Pagina di convalida UI dopo registrazione
 ├── home.html           # Pagina di ricerca ricette
 ├── recipe.html         # Pagina di dettaglio ricetta e recensioni
-├── cookbook.html       # Ricettario personale e note private
+├── cookbook.html       # Ricettario personale e recensioni
 ├── profile.html        # Area personale
 │
 ├── css/
 │   ├── style.css       # Tema dark, palette calda e componenti UI condivisi
-│   ├── cookbook.css    # Stili specifici per card e note del ricettario
+│   ├── cookbook.css    # Stili specifici per card e azioni del ricettario
 │   ├── home.css        # Stili specifici per le card ricette nella home
 │   ├── recipe.css      # Stili specifici per l'immagine nella scheda ricetta
 │   └── profile.css     # Stili specifici per la card profilo
@@ -166,11 +165,11 @@ Se l'utente è già autenticato (sessionStorage non vuoto), viene reindirizzato 
 
 La pagina di ricerca è strutturata in due aree verticali:
 
-1. **Barra di ricerca e filtri**: un input-group Bootstrap composto dal selettore del tipo di ricerca ("Per Nome" / "Per Ingrediente") e dall'input testuale, affiancati da select per categoria, area geografica e lettera iniziale. Categoria e area vengono popolate leggendo prima le rispettive cache in localStorage, con chiamate API solo in caso di cache assente o scaduta.
+1. **Barra di ricerca e filtri**: un input-group Bootstrap composto dal selettore del tipo di ricerca ("Per Nome" / "Per Ingrediente" / "Per Iniziale") e dall'input testuale, affiancati da select per categoria e area geografica. Categoria e area vengono popolate leggendo prima le rispettive cache in localStorage, con chiamate API solo in caso di cache assente o scaduta.
 
 2. **Griglia risultati**: un container `<div>` con classi Bootstrap `row row-cols-*` che viene riempito dinamicamente da JavaScript. Ogni elemento è una Bootstrap Card con immagine, titolo e link alla scheda dettagliata.
 
-La ricerca è **mutualmente esclusiva**: attivare un filtro per categoria, area o lettera iniziale svuota l'input testuale e gli altri filtri, e viceversa. La ricerca testuale è dotata di **debounce** a 500ms per limitare le chiamate API durante la digitazione.
+La ricerca è **mutualmente esclusiva**: attivare un filtro per categoria o area svuota l'input testuale e gli altri filtri, e viceversa. Anche la ricerca per iniziale passa dallo stesso campo testuale ed è dotata di **debounce** a 500ms per limitare le chiamate API durante la digitazione.
 
 Per "startup dell'applicazione" si intende l'ingresso nella prima pagina applicativa autenticata (`home.html`), perché prima del login non è necessario visualizzare dati TheMealDB. In questa fase vengono inizializzate le cache del catalogo A-Z, delle categorie e delle aree geografiche.
 
@@ -188,9 +187,9 @@ Il pulsante ricettario è implementato come toggle: il testo, il colore e l'icon
 
 ### 5.4 `cookbook.html` — Ricettario Personale
 
-Il ricettario personale è stato separato dall'area personale in una pagina dedicata, accessibile dalla navbar tramite il link "Ricettario". La pagina mostra una griglia di card, una per ogni ricetta salvata dall'utente. Ogni card contiene immagine, nome della ricetta, categoria, area geografica e una textarea per la nota privata.
+Il ricettario personale è stato separato dall'area personale in una pagina dedicata, accessibile dalla navbar tramite il link "Ricettario". La pagina mostra una griglia di card, una per ogni ricetta salvata dall'utente. Ogni card contiene immagine, nome della ricetta, categoria, area geografica e una riga di azioni divisa tra rimozione dal ricettario e gestione della recensione.
 
-Il nome e l'immagine della ricetta vengono letti prima dalle cache `pgrc_meal_details_cache`/`pgrc_meals_cache`, con API solo come fallback. La card è cliccabile e porta alla vista dettaglio già implementata (`recipe.html?id=...`), mentre il salvataggio della nota aggiorna `pgrc_cookbooks`.
+Il nome e l'immagine della ricetta vengono letti prima dalle cache `pgrc_meal_details_cache`/`pgrc_meals_cache`, con API solo come fallback. La card è cliccabile e porta alla vista dettaglio già implementata (`recipe.html?id=...`), mentre il pulsante di rimozione aggiorna `pgrc_cookbooks` dopo conferma e il pulsante recensione apre una modale precompilata quando l'utente ha già recensito quel piatto.
 
 ### 5.5 `profile.html` — Area Personale
 
@@ -248,8 +247,8 @@ La persistenza dei dati è interamente affidata al Web Storage del browser. Il m
 ```json
 {
   "user_1712345678900": [
-    { "mealId": "52772", "notes": "Ottima con pasta integrale." },
-    { "mealId": "52834", "notes": "" }
+    { "mealId": "52772" },
+    { "mealId": "52834" }
   ]
 }
 ```
@@ -434,7 +433,7 @@ Il catalogo completo TheMealDB richiede 26 chiamate API in parallelo. Effettuarl
 
 ### Delegazione degli eventi nel ricettario
 
-Le card del ricettario sono generate dinamicamente da JavaScript (una per ogni ricetta salvata). Anziché aggiungere un event listener a ogni bottone "Salva Nota" durante la creazione, viene usata la **event delegation**: un singolo listener sul container padre (`#cookbook-container`) intercetta tutti i click e identifica il target tramite `e.target.closest('.save-note-btn')`. Questo approccio è più efficiente in memoria e funziona correttamente anche con elementi aggiunti dinamicamente.
+Le card del ricettario sono generate dinamicamente da JavaScript (una per ogni ricetta salvata). Anziché aggiungere un event listener a ogni bottone durante la creazione, viene usata la **event delegation**: un singolo listener sul container padre (`#cookbook-container`) intercetta i click e identifica il target tramite `e.target.closest(...)`. Questo approccio è più efficiente in memoria e funziona correttamente anche con elementi aggiunti dinamicamente.
 
 ### Debounce sulla ricerca testuale
 
@@ -447,14 +446,14 @@ La ricerca testuale è collegata all'evento `input` dell'`<input>` di ricerca, c
 - **Autenticazione client-side**: le password sono salvate come salt+hash, non in chiaro. Rimane però una simulazione accademica senza back-end: chi controlla il browser può comunque ispezionare e modificare il codice o il localStorage.
 - **Nessun back-end**: le operazioni di autenticazione e persistenza sono simulate client-side; chiunque abbia accesso al browser può ispezionare o modificare i dati in localStorage tramite gli strumenti di sviluppo.
 - **Recensioni visibili solo localmente**: le recensioni sono salvate nel localStorage del singolo browser. Non essendoci un server condiviso, le recensioni di un utente non sono visibili ad altri utenti su macchine diverse.
-- **Ricettario locale**: per la stessa ragione, il ricettario e le note personali sono accessibili solo dal browser in cui sono stati creati.
+- **Ricettario locale**: per la stessa ragione, il ricettario è accessibile solo dal browser in cui è stato creato.
 - **Catalogo API dipendente da TheMealDB**: se il servizio TheMealDB non è raggiungibile, l'applicazione funziona solo parzialmente (con i dati in cache, se disponibili, o non funziona per le nuove ricerche).
 
 ---
 
 ## 12. Conclusioni
 
-Il progetto PGRC implementa tutte le funzionalità richieste dalla specifica: gestione del profilo utente (inclusi piatti preferiti), ricerca di ricette per nome, ingrediente, categoria, area geografica e lettera iniziale, gestione del ricettario personale con note private, e sistema di recensioni con data di preparazione e valutazioni a stelle.
+Il progetto PGRC implementa tutte le funzionalità richieste dalla specifica: gestione del profilo utente (inclusi piatti preferiti), ricerca di ricette per nome, ingrediente, categoria, area geografica e lettera iniziale, gestione del ricettario personale e sistema di recensioni con data di preparazione e valutazioni a stelle.
 
 L'architettura è volutamente semplice e aderente ai vincoli del corso: HTML5, CSS3 e JavaScript puro, senza back-end e senza framework aggiuntivi. L'utilizzo di Bootstrap 5 ha permesso di ottenere un'interfaccia visivamente moderna e responsive senza rinunciare alla separazione struttura/presentazione richiesta dalla specifica. Il caching delle ricette in localStorage migliora le prestazioni percepite e rispetta il requisito di memorizzare i dati API nel web storage del browser.
 

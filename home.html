@@ -49,13 +49,14 @@
 
         <div class="row g-3 mb-4 align-items-end">
             <!-- Barra di ricerca con selettore tipo -->
-            <div class="col-md-5">
+            <div class="col-md-7">
                 <label class="form-label fw-semibold">Cerca</label>
                 <div class="input-group">
                     <select class="form-select search-type-select" id="search-type"
                             title="Tipo di ricerca" aria-label="Tipo di ricerca">
                         <option value="name">Per Nome</option>
                         <option value="ingredient">Per Ingrediente</option>
+                        <option value="letter">Per Iniziale</option>
                     </select>
                     <input type="text" class="form-control" id="search-input"
                            placeholder="es. Pasta, Curry...">
@@ -73,39 +74,6 @@
                 <label for="area-filter" class="form-label fw-semibold">Area Geografica</label>
                 <select class="form-select" id="area-filter">
                     <option value="">Tutte le Aree</option>
-                </select>
-            </div>
-            <!-- Filtro Lettera Iniziale -->
-            <div class="col-md-2">
-                <label for="letter-filter" class="form-label fw-semibold">Iniziale</label>
-                <select class="form-select" id="letter-filter">
-                    <option value="">Tutte</option>
-                    <option value="a">A</option>
-                    <option value="b">B</option>
-                    <option value="c">C</option>
-                    <option value="d">D</option>
-                    <option value="e">E</option>
-                    <option value="f">F</option>
-                    <option value="g">G</option>
-                    <option value="h">H</option>
-                    <option value="i">I</option>
-                    <option value="j">J</option>
-                    <option value="k">K</option>
-                    <option value="l">L</option>
-                    <option value="m">M</option>
-                    <option value="n">N</option>
-                    <option value="o">O</option>
-                    <option value="p">P</option>
-                    <option value="q">Q</option>
-                    <option value="r">R</option>
-                    <option value="s">S</option>
-                    <option value="t">T</option>
-                    <option value="u">U</option>
-                    <option value="v">V</option>
-                    <option value="w">W</option>
-                    <option value="x">X</option>
-                    <option value="y">Y</option>
-                    <option value="z">Z</option>
                 </select>
             </div>
         </div>

@@ -11,7 +11,7 @@
  * STRUTTURA DATI IN LOCALSTORAGE:
  * ─────────────────────────────────────────────────────────────────
  *  pgrc_users        → Array<Utente>
- *  pgrc_cookbooks    → { [userId]: Array<{mealId, notes}> }
+ *  pgrc_cookbooks    → { [userId]: Array<{mealId}> }
  *  pgrc_reviews      → { [mealId]: Array<Recensione> }
  *  pgrc_meals_cache  → { timestamp: number, meals: Array<Pasto> }
  *  pgrc_categories_cache → { timestamp: number, categories: Array<Categoria> }
@@ -93,17 +93,13 @@
  *
  *   PASSO 5 — Dopo aver aggiunto una ricetta al ricettario:
  *     localStorage → pgrc_cookbooks: l'array del proprio userId ora contiene un elemento
- *     con {mealId: "XXXXX", notes: ""}
+ *     con {mealId: "XXXXX"}
  *
- *   PASSO 6 — Dopo aver salvato una nota privata:
- *     localStorage → pgrc_cookbooks: il campo "notes" dell'elemento corrispondente
- *     è ora valorizzato con il testo inserito
- *
- *   PASSO 7 — Dopo aver inviato una recensione:
+ *   PASSO 6 — Dopo aver inviato una recensione:
  *     localStorage → pgrc_reviews: oggetto con chiave = mealId, valore = array
  *     contenente l'oggetto recensione con preparationDate, difficulty, taste, ecc.
  *
- *   PASSO 8 — Dopo il logout:
+ *   PASSO 7 — Dopo il logout:
  *     sessionStorage → pgrc_loggedInUser: sparisce (la chiave non esiste più)
  *     localStorage rimane intatto (i dati persistono tra sessioni)
  *
@@ -221,7 +217,7 @@ function saveUsers(users) { saveData(USERS_KEY, users); }
 
 /**
  * Restituisce l'oggetto che mappa ogni userId al suo array di ricette salvate.
- * Struttura: { "user_XXX": [{mealId:"52772", notes:"mia nota"}, ...], ... }
+ * Struttura: { "user_XXX": [{mealId:"52772"}, ...], ... }
  *
  * @returns {Object}
  *
@@ -229,15 +225,47 @@ function saveUsers(users) { saveData(USERS_KEY, users); }
  * → Per vedere solo il tuo ricettario:
  *   JSON.parse(localStorage.getItem('pgrc_cookbooks'))[sessionStorage.getItem('pgrc_loggedInUser')]
  */
-function getCookbooks() { return getData(COOKBOOKS_KEY) || {}; }
+function normalizeCookbooks(cookbooks) {
+    let changed = false;
+    const normalized = {};
+
+    Object.entries(cookbooks || {}).forEach(([userId, recipes]) => {
+        if (!Array.isArray(recipes)) {
+            changed = true;
+            normalized[userId] = [];
+            return;
+        }
+
+        normalized[userId] = recipes.reduce((items, recipe) => {
+            if (!recipe || !recipe.mealId) {
+                changed = true;
+                return items;
+            }
+
+            const cleanRecipe = { mealId: String(recipe.mealId) };
+            if (Object.keys(recipe).length !== 1 || recipe.mealId !== cleanRecipe.mealId) {
+                changed = true;
+            }
+            items.push(cleanRecipe);
+            return items;
+        }, []);
+    });
+
+    if (changed) saveData(COOKBOOKS_KEY, normalized);
+    return normalized;
+}
+
+function getCookbooks() {
+    return normalizeCookbooks(getData(COOKBOOKS_KEY) || {});
+}
 
 /**
  * Sovrascrive l'intero oggetto dei ricettari in localStorage.
- * Usato da recipe.js (aggiungi/rimuovi ricetta) e da profile.js (salva nota, elimina profilo).
+ * Usato da recipe.js/cookbook.js (aggiungi/rimuovi ricetta) e da profile.js (elimina profilo).
  *
- * @param {Object} cookbooks - Oggetto aggiornato {userId: [{mealId, notes}]}
+ * @param {Object} cookbooks - Oggetto aggiornato {userId: [{mealId}]}
  */
-function saveCookbooks(cookbooks) { saveData(COOKBOOKS_KEY, cookbooks); }
+function saveCookbooks(cookbooks) { saveData(COOKBOOKS_KEY, normalizeCookbooks(cookbooks)); }
 
 // ─── Funzioni per le Recensioni ───────────────────────────────────────────────
 
