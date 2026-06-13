@@ -1,7 +1,6 @@
 # PGRC — Piattaforma Gestione Ricette di Cucina
 
-Progetto universitario per il corso di **Programmazione Web e Mobile** — A.A. 2024/2025  
-Autore: **Alberto Stanzani**
+Progetto universitario per il corso di **Programmazione Web e Mobile** — A.A. 2025/2026
 
 ---
 
@@ -49,22 +48,23 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 
 ## Tecnologie
 
-| Tecnologia | Uso |
-|---|---|
-| HTML5 | Struttura semantica delle pagine |
-| CSS3 | Presentazione (separata dall'HTML) |
-| JavaScript ES6+ | Logica applicativa vanilla (no framework) |
-| Bootstrap 5.3 | Layout responsive, componenti UI |
-| Bootstrap Icons 1.11 | Icone vettoriali |
-| TheMealDB API v1 | Sorgente dati ricette (REST/JSON) |
-| localStorage | Persistenza utenti, ricettari, recensioni, cache API |
-| sessionStorage | Sessione utente corrente |
+| Tecnologia           | Uso                                                  |
+| -------------------- | ---------------------------------------------------- |
+| HTML5                | Struttura semantica delle pagine                     |
+| CSS3                 | Presentazione (separata dall'HTML)                   |
+| JavaScript ES6+      | Logica applicativa vanilla (no framework)            |
+| Bootstrap 5.3        | Layout responsive, componenti UI                     |
+| Bootstrap Icons 1.11 | Icone vettoriali                                     |
+| TheMealDB API v1     | Sorgente dati ricette (REST/JSON)                    |
+| localStorage         | Persistenza utenti, ricettari, recensioni, cache API |
+| sessionStorage       | Sessione utente corrente                             |
 
 ---
 
 ## Pagine e funzionalità
 
 ### `index.html` — Login / Registrazione
+
 - Toggle tra form di login e form di registrazione (stessa pagina)
 - Registrazione raccoglie: username, email, password, piatti preferiti
 - Alla registrazione viene creato automaticamente un ricettario vuoto
@@ -72,6 +72,7 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 - Redirect automatico a `home.html` se sessione già attiva
 
 ### `home.html` — Ricerca Ricette
+
 - Ricerca testuale con selettore **Per Nome** / **Per Ingrediente** / **Per Iniziale**
 - Filtri a tendina per **Categoria** e **Area geografica**
 - Startup della home con cache localStorage di catalogo A–Z, categorie e aree (TTL 1h)
@@ -79,6 +80,7 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 - Griglia responsive Bootstrap di card cliccabili
 
 ### `recipe.html` — Dettaglio Ricetta
+
 - Immagine, badge categoria/area, lista ingredienti, procedimento completo
 - Dettaglio ricetta letto da `pgrc_meal_details_cache` o `pgrc_meals_cache`, con API solo come fallback
 - Pulsante **Aggiungi / Rimuovi dal Ricettario** con modale conferma/annulla
@@ -87,6 +89,7 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 - Un utente può avere una sola recensione per ricetta (sovrascrive)
 
 ### `cookbook.html` — Ricettario Personale
+
 - Pagina dedicata al ricettario, separata dall'area personale
 - Card cliccabili verso `recipe.html?id=...`
 - Rimozione ricette con modale di conferma
@@ -94,12 +97,14 @@ PGRC è una web application client-side che permette agli utenti registrati di c
 - Card popolate da cache dettagli/catalogo, con API solo come fallback
 
 ### `profile.html` — Area Personale
+
 - Card centrata con campi username, email, preferiti e password visibili da subito
 - Campi disabilitati di default, sbloccabili con **Modifica Dati**
 - Cambio password mediato da modale con password attuale
 - Eliminazione account (con pulizia ricettario e recensioni)
 
 ### UI condivisa
+
 - Tema dark di default con palette rosso caldo + crema
 - Navbar fixed sulle pagine autenticate
 - Modale riusabile per conferme e sblocco password
@@ -160,13 +165,13 @@ python3 -m http.server 8080
 
 ## Chiavi localStorage utilizzate
 
-| Chiave | Contenuto |
-|---|---|
-| `pgrc_users` | Array di oggetti utente con `passwordSalt`, `passwordHash`, `passwordAlgorithm` |
-| `pgrc_cookbooks` | Oggetto `{ userId: [{ mealId }] }` |
-| `pgrc_reviews` | Oggetto `{ mealId: [{ userId, username, preparationDate, date, difficulty, taste }] }` |
-| `pgrc_meals_cache` | Oggetto `{ timestamp, meals[] }` — TTL 1h |
-| `pgrc_categories_cache` | Oggetto `{ timestamp, categories[] }` — TTL 1h |
-| `pgrc_areas_cache` | Oggetto `{ timestamp, areas[] }` — TTL 1h |
-| `pgrc_meal_details_cache` | Oggetto `{ mealId: { timestamp, meal } }` — TTL 1h |
-| `pgrc_loggedInUser` *(sessionStorage)* | ID utente della sessione corrente |
+| Chiave                                 | Contenuto                                                                              |
+| -------------------------------------- | -------------------------------------------------------------------------------------- |
+| `pgrc_users`                           | Array di oggetti utente con `passwordSalt`, `passwordHash`, `passwordAlgorithm`        |
+| `pgrc_cookbooks`                       | Oggetto `{ userId: [{ mealId }] }`                                                     |
+| `pgrc_reviews`                         | Oggetto `{ mealId: [{ userId, username, preparationDate, date, difficulty, taste }] }` |
+| `pgrc_meals_cache`                     | Oggetto `{ timestamp, meals[] }` — TTL 1h                                              |
+| `pgrc_categories_cache`                | Oggetto `{ timestamp, categories[] }` — TTL 1h                                         |
+| `pgrc_areas_cache`                     | Oggetto `{ timestamp, areas[] }` — TTL 1h                                              |
+| `pgrc_meal_details_cache`              | Oggetto `{ mealId: { timestamp, meal } }` — TTL 1h                                     |
+| `pgrc_loggedInUser` _(sessionStorage)_ | ID utente della sessione corrente                                                      |
