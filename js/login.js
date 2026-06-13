@@ -8,8 +8,9 @@
  * È già loggato, lo mandiamo via (a home.html).
  *
  * DIPENDENZE (caricate prima di questo script in index.html):
- *   - storage.js  (per LOGGED_IN_USER_KEY, che è definita in auth.js)
- *   - auth.js     (per l'oggetto auth e la costante LOGGED_IN_USER_KEY)
+ *   - storage.js  (lettura/scrittura localStorage usata internamente da auth.js)
+ *   - ui.js       (alert globali)
+ *   - auth.js     (oggetto auth e costante LOGGED_IN_USER_KEY)
  *
  * STRUTTURA DI index.html GESTITA DA QUESTO CONTROLLER:
  *   #login-view    → form di login     (visibile di default)

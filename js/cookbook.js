@@ -1,8 +1,23 @@
 /**
- * cookbook.js — Controller pagina ricettario personale.
+ * =============================================================================
+ * cookbook.js — Controller pagina ricettario personale
+ * =============================================================================
  *
- * Mostra le ricette salvate dall'utente, gestisce la rimozione dal ricettario
- * e permette di inserire o modificare la propria recensione.
+ * Questa pagina mostra le ricette salvate dall'utente corrente. Ogni card ha:
+ *   - un link alla scheda dettagliata della ricetta;
+ *   - un pulsante per rimuovere la ricetta dal ricettario con conferma;
+ *   - un pulsante per scrivere o modificare la recensione dell'utente.
+ *
+ * DATI COINVOLTI:
+ *   - pgrc_cookbooks: { userId: [{ mealId }] }
+ *   - pgrc_reviews: { mealId: [{ userId, username, preparationDate, date, difficulty, taste }] }
+ *   - cache dettagli/catalogo: usate per evitare chiamate API se la ricetta è già nota.
+ *
+ * NOTA PROGETTUALE:
+ *   Il ricettario rimane una raccolta di ricette salvate. La valutazione personale
+ *   passa dal sistema recensioni, così la card non contiene due feature testuali
+ *   sovrapposte.
+ * =============================================================================
  */
 document.addEventListener('DOMContentLoaded', async () => {
     auth.checkAuth();
@@ -15,6 +30,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeReviewMealId = null;
 
     async function getCookbookMeal(mealId) {
+        // Priorità cache dettaglio → cache catalogo → API. Così la pagina è veloce
+        // e resta coerente con il requisito di memorizzare i dati TheMealDB.
         const cachedDetail = getMealDetailCache(mealId);
         if (cachedDetail) return cachedDetail;
 
@@ -33,11 +50,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function getUserReview(mealId) {
+        // Serve a decidere se il bottone deve dire "Recensisci" oppure "Modifica".
         const mealReviews = getReviews()[mealId] || [];
         return mealReviews.find(review => review.userId === currentUser.id) || null;
     }
 
     function ensureReviewModal() {
+        // La modale viene costruita una sola volta e poi riusata per tutte le card.
         let modal = document.getElementById('cookbook-review-modal');
         if (modal) return modal;
 
@@ -103,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             event.preventDefault();
             if (!activeReviewMealId) return;
 
+            // Regola "una recensione per utente per ricetta": rimuoviamo l'eventuale
+            // review precedente dell'utente e poi salviamo quella aggiornata.
             const allReviews = getReviews();
             const mealReviews = (allReviews[activeReviewMealId] || [])
                 .filter(review => review.userId !== currentUser.id);
@@ -131,6 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function openReviewModal(mealId) {
+        // activeReviewMealId collega il submit della modale alla ricetta della card cliccata.
         activeReviewMealId = mealId;
 
         const modal = ensureReviewModal();
@@ -151,6 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         form.reset();
 
         if (userReview) {
+            // Se esiste già una recensione, la modale diventa una schermata di edit.
             modal.querySelector('#cookbook-review-date').value = userReview.preparationDate;
             modal.querySelector('#cookbook-review-difficulty').value = userReview.difficulty;
             modal.querySelector('#cookbook-review-taste').value = userReview.taste;
@@ -160,6 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function removeRecipeFromCookbook(mealId) {
+        // La rimozione dal ricettario è irreversibile lato UI, quindi passa da ui.confirm().
         const confirmed = await ui.confirm({
             title: 'Rimuovi dal ricettario',
             message: 'Vuoi rimuovere questa ricetta dal tuo ricettario personale?',
@@ -172,6 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const cookbooks = getCookbooks();
         const userCookbook = cookbooks[currentUser.id] || [];
+        // Filtriamo invece di usare splice per ottenere un nuovo array più leggibile.
         const nextCookbook = userCookbook.filter(recipe => recipe.mealId !== mealId);
 
         cookbooks[currentUser.id] = nextCookbook;
@@ -202,6 +227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!meal) continue;
 
             const mealId = String(meal.idMeal || recipeInfo.mealId);
+            // Stato derivato dalle recensioni: non viene duplicato dentro pgrc_cookbooks.
             const hasUserReview = Boolean(getUserReview(mealId));
             const reviewIcon = hasUserReview ? 'bi-pencil-square' : 'bi-chat-left-text';
             const reviewLabel = hasUserReview ? 'Modifica' : 'Recensisci';
@@ -242,6 +268,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     cookbookContainer.addEventListener('click', async (event) => {
+        // Event delegation: le card sono generate dinamicamente, quindi basta
+        // un listener sul container invece di uno per ogni bottone.
         const removeBtn = event.target.closest('.remove-recipe-btn');
         if (removeBtn) {
             await removeRecipeFromCookbook(removeBtn.dataset.mealId);

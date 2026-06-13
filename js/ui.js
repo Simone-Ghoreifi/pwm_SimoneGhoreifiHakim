@@ -1,10 +1,24 @@
 /**
- * ui.js — Componenti UI riutilizzabili.
+ * =============================================================================
+ * ui.js — Componenti UI riutilizzabili
+ * =============================================================================
  *
- * Espone:
- *   - ui.confirm(...): modale conferma/annulla Promise-based
- *   - ui.promptPassword(...): modale con campo password
- *   - ui.notify(...): alert globali animati sopra il viewport
+ * Questo modulo evita di duplicare markup Bootstrap in ogni controller.
+ * Espone un unico oggetto globale `ui` con tre funzioni:
+ *   - ui.confirm(...): modale conferma/annulla Promise-based;
+ *   - ui.promptPassword(...): modale con campo password;
+ *   - ui.notify(...): alert globali animati sopra il viewport.
+ *
+ * PERCHÉ LE MODALI SONO CREATE VIA JS:
+ *   Le stesse modali servono in più pagine. Generarle on demand mantiene gli HTML
+ *   puliti e garantisce una sola implementazione per conferme, sblocco password
+ *   e notifiche. I controller non devono conoscere il markup Bootstrap interno.
+ *
+ * PERCHÉ RESTITUIRE PROMISE:
+ *   Con `await ui.confirm(...)` il flusso resta lineare: il codice attende la
+ *   scelta dell'utente e poi continua solo se serve. È più leggibile rispetto a
+ *   callback annidate o variabili globali temporanee.
+ * =============================================================================
  */
 const ui = (() => {
     const CONFIRM_MODAL_ID = 'pgrc-confirm-modal';
@@ -12,6 +26,7 @@ const ui = (() => {
     const ALERT_CONTAINER_ID = 'pgrc-alert-container';
 
     function ensureConfirmModal() {
+        // Lazy creation: se la modale esiste già, la riusiamo senza duplicare DOM.
         let modal = document.getElementById(CONFIRM_MODAL_ID);
         if (modal) return modal;
 
@@ -72,6 +87,8 @@ const ui = (() => {
             let confirmed = false;
 
             const onConfirm = () => {
+                // Non risolviamo subito: aspettiamo hidden.bs.modal per coprire
+                // anche chiusure da ESC/backdrop/bottone Annulla in modo uniforme.
                 confirmed = true;
                 modal.hide();
             };
@@ -88,6 +105,7 @@ const ui = (() => {
     }
 
     function ensurePasswordModal() {
+        // Stessa strategia della confirm modal: markup unico, creato solo se serve.
         let modal = document.getElementById(PASSWORD_MODAL_ID);
         if (modal) return modal;
 
@@ -143,6 +161,7 @@ const ui = (() => {
             let submitted = false;
 
             const submit = () => {
+                // submitted distingue "Conferma" da chiusura/annulla della modale.
                 submitted = true;
                 modal.hide();
             };
@@ -167,6 +186,7 @@ const ui = (() => {
     }
 
     function ensureAlertContainer() {
+        // Un solo contenitore per tutte le notifiche, aggiunto in fondo al body.
         let container = document.getElementById(ALERT_CONTAINER_ID);
         if (container) return container;
 
@@ -202,6 +222,7 @@ const ui = (() => {
         `;
 
         const close = () => {
+            // L'alert resta nel DOM il tempo necessario alla transizione CSS.
             alert.classList.add('is-leaving');
             setTimeout(() => alert.remove(), 220);
         };
